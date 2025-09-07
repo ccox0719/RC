@@ -49,7 +49,7 @@ export function lowestLivingHeroId(){
   return S.heroes[id1].hp <= S.heroes[id2].hp ? id1 : id2;
 }
 export function chooseNextTarget(){
-  const nextDefault = (S.boss?.target==="A") ? "B" : "A");
+  const nextDefault = (S.boss?.target==="A") ? "B" : "A";
   const live = livingHeroIds();
   if (live.includes(nextDefault)) return nextDefault;
   return live[0] ?? "A";
