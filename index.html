@@ -1,261 +1,349 @@
-<!DOCTYPE html>
-<html lang="en" class="h-full">
+<!doctype html>
+<html lang="en">
 <head>
-  <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Retirement Planner Dashboard</title>
-  <script src="https://cdn.tailwindcss.com"></script>
-  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-  <link rel="preconnect" href="https://fonts.googleapis.com">
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;800&display=swap" rel="stylesheet">
-  <style>
-    body{ font-family:'Inter',sans-serif; }
-    .backdrop{ background:linear-gradient(135deg,#6366f1,#a855f7); min-height:100%; }
-    .glass{ backdrop-filter:blur(16px); background:rgba(255,255,255,.85); border:1px solid rgba(255,255,255,.4); }
-    .btn{ @apply px-3 py-2 rounded-lg font-medium transition; }
-    .btn-primary{ @apply bg-indigo-600 text-white hover:bg-indigo-700 active:scale-95; }
-    .btn-secondary{ @apply bg-white/70 text-slate-800 border border-slate-200 hover:bg-white active:scale-95; }
-    .label{ @apply text-xs font-semibold text-slate-600 uppercase tracking-wide; }
-    .input{ @apply w-full px-3 py-2 rounded-lg border border-slate-300 shadow-sm focus:outline-none focus:ring-2 focus:ring-indigo-300; }
-    .summary-card{ @apply glass rounded-2xl p-4 flex flex-col items-start shadow-lg; }
-    .summary-value{ @apply text-2xl font-extrabold text-slate-900; }
-    .summary-label{ @apply text-xs text-slate-600; }
-    .chip{ @apply text-[11px] px-2 py-1 rounded-full bg-indigo-50 text-indigo-700 border border-indigo-200; }
-    .table-head{ position:sticky; top:0; background:rgba(255,255,255,.95); backdrop-filter: blur(8px); box-shadow:0 1px 0 rgba(2,6,23,.06); }
-  </style>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Retirement Scenario Explorer</title>
+<style>
+  :root{
+    --bg1:#1cc9c7; --bg2:#66d4e5; --bg3:#8fe0f0;
+    --card:#ffffff; --ink:#0f172a; --muted:#475569; --accent:#10b981; --brand:#0ea5e9; --warn:#ef4444;
+    --radius:16px;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;font-family:Inter,system-ui,-apple-system,Segoe UI,Roboto,Ubuntu,"Helvetica Neue",Arial,sans-serif;color:var(--ink);
+    background: radial-gradient(1200px 600px at 10% -10%, #0fb1ea33, transparent),
+               radial-gradient(1000px 500px at 100% 0%, #10b98133, transparent),
+               linear-gradient(135deg,var(--bg1),var(--bg2) 40%,var(--bg3));
+    min-height:100vh;}
+  .wrap{max-width:1100px;margin:40px auto;padding:0 16px}
+  .card{background:var(--card); border-radius:var(--radius); box-shadow:0 20px 40px rgba(2,8,23,.15);}
+  .card h1{margin:0;padding:20px 24px;font-size:22px}
+  .card .content{padding:20px 24px}
+  .grid{display:grid; gap:16px}
+  @media(min-width:900px){.grid.cols-3{grid-template-columns:1fr 1fr 1fr}}
+  label{display:block;font-size:12px;color:var(--muted);margin:6px 0}
+  input[type="number"], input[type="text"]{width:100%;padding:10px 12px;border:1px solid #e5e7eb;border-radius:10px;font-size:14px}
+  .row{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+  .switch{display:flex;align-items:center;gap:8px;margin-top:6px}
+  .btn{display:inline-block;background:linear-gradient(135deg,#0ea5e9,#14b8a6);color:#fff;border:none;padding:12px 16px;border-radius:999px;font-weight:600;cursor:pointer;box-shadow:0 10px 20px rgba(14,165,233,.25);} 
+  .btn.secondary{background:#e2e8f0;color:#111827}
+  .btnbar{display:flex;flex-wrap:wrap;gap:10px}
+  .kpis{display:grid;gap:12px;margin-top:18px}
+  @media(min-width:900px){.kpis{grid-template-columns:1fr 1fr 1fr}}
+  .kpi{background:#fff;border-radius:14px;box-shadow:0 8px 20px rgba(2,8,23,.12);padding:14px}
+  .kpi .t{font-size:12px;color:var(--muted)}
+  .kpi .v{font-size:22px;font-weight:700}
+  table{width:100%;border-collapse:collapse;font-size:13px}
+  th,td{padding:8px;border-bottom:1px solid #f1f5f9;text-align:right}
+  th:first-child, td:first-child, th:nth-child(2), td:nth-child(2){text-align:left}
+  thead th{position:sticky;top:0;background:#f8fafc}
+  .chart{height:320px;background:#fff;border-radius:14px;box-shadow:0 8px 20px rgba(2,8,23,.12);padding:10px}
+  .legend{display:flex;gap:14px;align-items:center;font-size:12px;color:var(--muted);margin:6px 0}
+  .dot{width:10px;height:10px;border-radius:999px;display:inline-block}
+  .dot.base{background:#2563eb}
+  .dot.early{background:#0ea5e9}
+  .dot.biz{background:#10b981}
+  .note{font-size:12px;color:var(--muted)}
+</style>
 </head>
-<body class="backdrop text-slate-900">
-  <div class="max-w-7xl mx-auto p-6 space-y-6">
-
-    <!-- Header -->
-    <header class="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
-      <div>
-        <h1 class="text-4xl font-extrabold text-white">Retirement Planner Dashboard</h1>
-        <p class="text-sm text-indigo-100 mt-1">Visualize your path to retirement. Adjust numbers, compare scenarios, and plan with clarity. Autosaves to your browser.</p>
+<body>
+  <div class="wrap">
+    <div class="card">
+      <h1>Retirement Scenario Explorer</h1>
+      <div class="content grid cols-3">
+        <!-- Col 1 -->
+        <div>
+          <label>Current Age</label>
+          <input id="currentAge" type="number" value="43">
+          <label>Current Portfolio ($)</label>
+          <input id="currentBalance" type="number" value="551979">
+          <label>Monthly Contribution ($)</label>
+          <input id="monthlyContribution" type="number" value="4500">
+          <div class="row">
+            <div>
+              <label>Return %</label>
+              <input id="expectedReturn" type="number" value="7">
+            </div>
+            <div>
+              <label>Inflation %</label>
+              <input id="inflation" type="number" value="2.5">
+            </div>
+          </div>
+          <label>One-time Addition (settlement) next year ($)</label>
+          <input id="oneTime" type="number" value="150000">
+        </div>
+        <!-- Col 2 -->
+        <div>
+          <label>Retirement Age</label>
+          <input id="retirementAge" type="number" value="52">
+          <label>Annual Spending Target (today's $)</label>
+          <input id="spending" type="number" value="70000">
+          <div class="row">
+            <div>
+              <label>Early Extra Spend ($/yr)</label>
+              <input id="earlyExtra" type="number" value="20000">
+            </div>
+            <div>
+              <label>Early Extra Years</label>
+              <input id="earlyYears" type="number" value="5">
+            </div>
+          </div>
+          <div class="switch">
+            <input id="includeSS" type="checkbox" checked>
+            <label for="includeSS">Include Social Security</label>
+          </div>
+          <div class="row">
+            <div>
+              <label>SS Start Age</label>
+              <input id="ssAge" type="number" value="67">
+            </div>
+            <div>
+              <label>SS Annual (today's $)</label>
+              <input id="ssAnnual" type="number" value="65000">
+            </div>
+          </div>
+        </div>
+        <!-- Col 3 -->
+        <div>
+          <label>Mortgage Payment Annual ($)</label>
+          <input id="mortPmt" type="number" value="10762">
+          <label>Mortgage Ends (age)</label>
+          <input id="mortEnds" type="number" value="53">
+          <div class="row">
+            <div>
+              <label>Model through Age</label>
+              <input id="endAge" type="number" value="90">
+            </div>
+            <div>
+              <label>Withdrawal Rule % (ref)</label>
+              <input id="rule" type="number" value="4">
+            </div>
+          </div>
+          $1
+          <div class="btnbar" style="margin-top:8px">
+            <button class="btn secondary" onclick="savePreset('base')">Save → Base</button>
+            <button class="btn secondary" onclick="savePreset('early')">Save → Early‑Spend</button>
+            <button class="btn secondary" onclick="savePreset('biz')">Save → Business‑Bridge</button>
+          </div>
+          <div class="note" style="margin-top:6px">Adjust any inputs, then click <b>Save → [Preset]</b> to overwrite that preset with your current settings. Presets are stored locally in your browser.</div>
+          <div class="note" style="margin-top:8px">Presets:
+            <b>Base</b> (your numbers), <b>Early‑Spend</b> (retire 50; extra $25k for 7y),
+            <b>Business‑Bridge</b> (retire 52; business $14k/yr to 67).
+          </div>
+        </div>
       </div>
-      <div class="flex gap-2">
-        <button id="btnExportJSON" class="btn btn-secondary">Export</button>
-        <label class="btn btn-secondary cursor-pointer">Import<input id="fileImport" type="file" accept="application/json" class="hidden"/></label>
-        <button id="btnReset" class="btn btn-primary">Reset</button>
+    </div>
+
+    <div class="kpis">
+      <div class="kpi"><div class="t">Portfolio at Retirement (Base)</div><div class="v" id="kpiRet">—</div></div>
+      <div class="kpi"><div class="t">Portfolio at 67 (Base)</div><div class="v" id="kpi67">—</div></div>
+      <div class="kpi"><div class="t">Age when 4% ≥ Target</div><div class="v" id="kpi4">—</div></div>
+    </div>
+
+    <div class="chart" style="margin-top:16px">
+      <div class="legend">
+        <span class="dot base"></span> Base
+        <span class="dot early"></span> Early‑Spend
+        <span class="dot biz"></span> Business‑Bridge
       </div>
-    </header>
+      <svg id="chart" viewBox="0 0 900 300"></svg>
+    </div>
 
-    <!-- Summary Widgets -->
-    <section class="grid grid-cols-2 md:grid-cols-4 gap-4">
-      <div class="summary-card"><div class="summary-value" id="summaryRetireAge">–</div><div class="summary-label">Earliest Retirement Age (4% ≥ spend)</div></div>
-      <div class="summary-card"><div class="summary-value" id="summaryBal67">–</div><div class="summary-label">Highest End Balance @67</div></div>
-      <div class="summary-card"><div class="summary-value" id="summaryBal90">–</div><div class="summary-label">Highest End Balance @90</div></div>
-      <div class="summary-card"><div class="summary-value" id="summaryFourPct">–</div><div class="summary-label">Scenario hitting 4% first</div></div>
-    </section>
-
-    <!-- Inputs -->
-    <section class="glass rounded-3xl p-6">
-      <h2 class="text-lg font-semibold mb-3">Inputs</h2>
-      <div class="grid grid-cols-1 md:grid-cols-4 gap-4">
-        <div><div class="label">Current Age</div><input id="currentAge" type="number" class="input"></div>
-        <div><div class="label">End Age</div><input id="endAge" type="number" class="input"></div>
-        <div><div class="label">Current Balance ($)</div><input id="currentBalance" type="number" step="0.01" class="input"></div>
-        <div><div class="label">Settlement Amount ($)</div><input id="settlementAmount" type="number" class="input"></div>
-        <div><div class="label">Settlement Age</div><input id="settlementAge" type="number" class="input"></div>
-        <div><div class="label">Annual Spend (today $)</div><input id="annualSpendToday" type="number" class="input"></div>
-        <div><div class="label">Pre‑Ret Return (0‑1)</div><input id="preReturn" type="number" step="0.001" class="input"></div>
-        <div><div class="label">Post‑Ret Return (0‑1)</div><input id="postReturn" type="number" step="0.001" class="input"></div>
-        <div><div class="label">Inflation (0‑1)</div><input id="inflation" type="number" step="0.001" class="input"></div>
-        <div><div class="label">SS Start Age</div><input id="ssStartAge" type="number" class="input"></div>
-        <div><div class="label">SS Household (today $)</div><input id="ssHouseholdToday" type="number" class="input"></div>
-        <div><div class="label">Mortgage Annual ($/yr)</div><input id="mortgageAnnual" type="number" step="0.01" class="input"></div>
-        <div><div class="label">Mortgage End Age</div><input id="mortgageEndAge" type="number" class="input"></div>
+    <div class="card" style="margin-top:16px">
+      <div class="content">
+        <h2 style="margin:0 0 10px 0;font-size:18px">Year‑by‑Year (Base Scenario)</h2>
+        <div style="max-height:360px;overflow:auto">
+          <table id="table">
+            <thead>
+              <tr>
+                <th>Year</th><th>Age</th><th>Contrib</th><th>Invest Return</th><th>SS</th><th>Business</th><th>Spend Need</th><th>Portfolio Withdraw</th><th>4% of End Bal</th><th>End Balance</th>
+              </tr>
+            </thead>
+            <tbody></tbody>
+          </table>
+        </div>
       </div>
-    </section>
+    </div>
 
-    <!-- Scenarios -->
-    <section class="glass rounded-3xl p-6">
-      <div class="flex items-center justify-between mb-3">
-        <h2 class="text-lg font-semibold">Scenarios</h2>
-        <button id="btnAddScenario" class="btn btn-primary">+ Add Scenario</button>
-      </div>
-      <div id="scenariosWrap" class="space-y-3"></div>
-    </section>
-
-    <!-- Charts -->
-    <section class="grid grid-cols-1 lg:grid-cols-2 gap-6">
-      <div class="glass rounded-3xl p-6">
-        <h3 class="font-semibold mb-2">End Balance by Age</h3>
-        <canvas id="balChart" height="320"></canvas>
-      </div>
-      <div class="glass rounded-3xl p-6">
-        <h3 class="font-semibold mb-2">4% Income vs. Spending</h3>
-        <canvas id="fourChart" height="320"></canvas>
-      </div>
-    </section>
-
-    <!-- Tables -->
-    <section id="tables" class="space-y-6"></section>
-
-    <footer class="text-xs text-white/90">Your data saves to this browser (localStorage). Export/Import to move it.</footer>
+    <p class="note" style="margin:12px 4px">* Spending and Social Security are inflation‑adjusted. One‑time settlement is added next year before growth. This is a planning tool, not advice.</p>
   </div>
 
 <script>
-(function(){
-  // ---------- Utilities ----------
-  const $ = (sel) => document.querySelector(sel);
-  const fmt$ = (n) => isFinite(n) ? n.toLocaleString(undefined,{style:'currency',currency:'USD',maximumFractionDigits:0}) : '–';
-  const clone = (x) => JSON.parse(JSON.stringify(x));
+function val(id){return Number(document.getElementById(id).value||0)}
+function setVal(id,v){document.getElementById(id).value=v}
+const money=n=>"$"+(Math.round(n).toLocaleString());
+const yearNow=new Date().getFullYear();
 
-  // ---------- Defaults (pre‑loaded with your numbers) ----------
-  const DEFAULT_INPUTS = {
-    currentAge: 43,
-    endAge: 95,
-    currentBalance: 551979.24,
-    settlementAmount: 150000,
-    settlementAge: 44,
-    annualSpendToday: 70000,
-    preReturn: 0.07,
-    postReturn: 0.06,
-    inflation: 0.03,
-    ssStartAge: 67,
-    ssHouseholdToday: 65000,
-    mortgageAnnual: 896.81*12,
-    mortgageEndAge: 53,
-  };
-  const DEFAULT_SCENARIOS = [
-    { id: 'A', name: 'A: Retire ASAP', retireAge: 50, monthlyContrib: 4500, businessIncome: 0, payoffMortgageWithSettlement: false },
-    { id: 'B', name: 'B: Balanced', retireAge: 55, monthlyContrib: 4500, businessIncome: 12000, payoffMortgageWithSettlement: false },
-    { id: 'C', name: 'C: More Comfort', retireAge: 56, monthlyContrib: 3000, businessIncome: 0, payoffMortgageWithSettlement: false },
-  ];
+function inflate(amount, years, infl){return amount*Math.pow(1+infl,years)}
 
-  // ---------- State ----------
-  let inputs = clone(DEFAULT_INPUTS);
-  let scenarios = clone(DEFAULT_SCENARIOS);
-  const SAVED = localStorage.getItem('retirePlanner_v1');
-  if (SAVED){ try{ const parsed = JSON.parse(SAVED); if(parsed.inputs && parsed.scenarios){ inputs = parsed.inputs; scenarios = parsed.scenarios; } }catch(e){} }
+function project(p){
+  const rows=[]; let bal=p.currentBalance; const startAge=p.currentAge;
+  for(let age=startAge; age<=p.endAge; age++){
+    const i=age-startAge; let contrib = age<p.retirementAge ? p.monthlyContribution*12 : 0;
+    // One-time addition next year
+    if(i===1 && p.oneTime>0){ bal += p.oneTime; }
+    const business = age<=p.businessEnds ? p.businessIncome : 0;
+    const ss = p.includeSS && age>=p.ssAge ? inflate(p.ssAnnual, age-p.ssAge, p.inflation) : 0;
 
-  // ---------- Bind Inputs ----------
-  const bindInput = (id, key) => { const el = $('#'+id); el.value = inputs[key]; el.addEventListener('input', ()=>{ inputs[key] = parseFloat(el.value); rerender(); save(); }); };
-  ['currentAge','endAge','currentBalance','settlementAmount','settlementAge','annualSpendToday','preReturn','postReturn','inflation','ssStartAge','ssHouseholdToday','mortgageAnnual','mortgageEndAge'].forEach(k=> bindInput(k,k));
+    let spend = inflate(p.spending, age-startAge, p.inflation);
+    if(age<p.mortEnds){ spend += inflate(p.mortPmt, age-startAge, p.inflation); }
+    if(age>=p.retirementAge && age<p.retirementAge+p.earlyYears){ spend += inflate(p.earlyExtra, age-p.retirementAge, p.inflation); }
 
-  $('#btnReset').addEventListener('click', ()=>{ inputs = clone(DEFAULT_INPUTS); scenarios = clone(DEFAULT_SCENARIOS); hydrateInputs(); rerender(); save(); });
-  $('#btnAddScenario').addEventListener('click', ()=>{ const n=scenarios.length+1; scenarios.push({ id:String.fromCharCode(64+n), name:`Scenario ${n}`, retireAge: inputs.currentAge+10, monthlyContrib: 4000, businessIncome: 0, payoffMortgageWithSettlement:false }); rerender(); save(); });
-  $('#btnExportJSON').addEventListener('click', ()=>{ const blob = new Blob([JSON.stringify({inputs,scenarios},null,2)],{type:'application/json'}); const url=URL.createObjectURL(blob); const a=document.createElement('a'); a.href=url; a.download='retirement_planner_settings.json'; a.click(); URL.revokeObjectURL(url); });
-  $('#fileImport').addEventListener('change', e=>{ const f=e.target.files?.[0]; if(!f) return; const r=new FileReader(); r.onload=()=>{ try{ const d=JSON.parse(r.result); if(d.inputs&&d.scenarios){ inputs=d.inputs; scenarios=d.scenarios; hydrateInputs(); rerender(); save(); } }catch{ alert('Invalid JSON'); } }; r.readAsText(f); });
+    const growthOnBal = bal*p.return;
+    const growthOnContrib = contrib*p.return*0.5; // half-year timing
+    bal += contrib + growthOnBal + growthOnContrib;
 
-  function hydrateInputs(){ Object.entries(inputs).forEach(([k,v])=>{ const el=document.getElementById(k); if(el) el.value=v; }); }
-  function save(){ localStorage.setItem('retirePlanner_v1', JSON.stringify({inputs,scenarios})); }
-
-  // ---------- Scenario Editor ----------
-  function renderScenarioEditors(){
-    const wrap = document.getElementById('scenariosWrap'); wrap.innerHTML='';
-    scenarios.forEach((s, idx)=>{
-      const row = document.createElement('div');
-      row.className = 'grid grid-cols-1 md:grid-cols-6 gap-3 items-end p-4 rounded-2xl bg-white/80 border border-white/60';
-      row.innerHTML = `
-        <div class="md:col-span-2"><div class="label mb-1">Name</div><input class="input" value="${s.name}"></div>
-        <div><div class="label mb-1">Retire Age</div><input class="input" type="number" value="${s.retireAge}"></div>
-        <div><div class="label mb-1">Monthly Contrib ($)</div><input class="input" type="number" value="${s.monthlyContrib}"></div>
-        <div><div class="label mb-1">Business Income ($/yr)</div><input class="input" type="number" value="${s.businessIncome}"></div>
-        <div><div class="label mb-1">Payoff Mortgage w/ Settlement?</div><select class="input"><option value="false" ${!s.payoffMortgageWithSettlement?'selected':''}>No</option><option value="true" ${s.payoffMortgageWithSettlement?'selected':''}>Yes</option></select></div>
-        <div class="flex gap-2 md:justify-end"><button class="btn btn-secondary" data-act="dup">Duplicate</button><button class="btn btn-secondary" data-act="del">Delete</button></div>
-        <div class="md:col-span-6 text-sm text-slate-700 mt-1">4% ≥ spend at: <strong data-out="first"></strong> • End bal @67: <strong data-out="b67"></strong> • End bal @90: <strong data-out="b90"></strong></div>`;
-      const [nameEl, retireEl, contribEl, bizEl, payoffSel] = [0,1,2,3,4].map(i=> row.querySelectorAll('input,select')[i]);
-      nameEl.addEventListener('input', ()=>{ s.name=nameEl.value; rerender(); save(); });
-      retireEl.addEventListener('input', ()=>{ s.retireAge=parseInt(retireEl.value||'0'); rerender(); save(); });
-      contribEl.addEventListener('input', ()=>{ s.monthlyContrib=parseFloat(contribEl.value||'0'); rerender(); save(); });
-      bizEl.addEventListener('input', ()=>{ s.businessIncome=parseFloat(bizEl.value||'0'); rerender(); save(); });
-      payoffSel.addEventListener('change', ()=>{ s.payoffMortgageWithSettlement = payoffSel.value==='true'; rerender(); save(); });
-      row.querySelector('[data-act="dup"]').addEventListener('click', ()=>{ const copy=clone(s); copy.id=String.fromCharCode(65+scenarios.length); copy.name=s.name+' (copy)'; scenarios.push(copy); rerender(); save(); });
-      row.querySelector('[data-act="del"]').addEventListener('click', ()=>{ scenarios.splice(idx,1); rerender(); save(); });
-      wrap.appendChild(row);
-    });
-  }
-
-  // ---------- Simulator ----------
-  function simulateScenario(s){
-    const rows=[]; let endBalPrev=inputs.currentBalance;
-    for(let age=inputs.currentAge; age<=inputs.endAge; age++){
-      const yearsFromToday=age-inputs.currentAge; const retired=age>=s.retireAge;
-      const startBal=endBalPrev; const contrib=!retired ? s.monthlyContrib*12 : 0; const settlement=age===inputs.settlementAge?inputs.settlementAmount:0;
-      const spendInfl=inputs.annualSpendToday*Math.pow(1+inputs.inflation, yearsFromToday); const ssInfl=inputs.ssHouseholdToday*Math.pow(1+inputs.inflation, yearsFromToday);
-      let mortgageAdd=0; const mortgageActive=age<inputs.mortgageEndAge; if(mortgageActive){ mortgageAdd = (s.payoffMortgageWithSettlement && age>=inputs.settlementAge)?0:inputs.mortgageAnnual; }
-      const bizIncome=(retired && age<inputs.ssStartAge)?s.businessIncome:0; const socialSec=(age>=inputs.ssStartAge)?ssInfl:0;
-      const appliedReturn = !retired ? inputs.preReturn : inputs.postReturn; const investReturn=(startBal+contrib+settlement)*appliedReturn;
-      const need=spendInfl+mortgageAdd-bizIncome-socialSec; const netWithdrawal = retired ? Math.max(0, need) : 0;
-      const endBal=startBal+contrib+settlement+investReturn-netWithdrawal; const fourPct=endBal*0.04;
-      rows.push({ age,startBal,contrib,settlement,spendInfl,mortgageAdd,bizIncome,socialSec,investReturn,netWithdrawal,endBal,fourPct }); endBalPrev=endBal;
+    let portfolioWithdraw=0;
+    if(age>=p.retirementAge){
+      const gap = spend - (ss+business);
+      portfolioWithdraw = Math.max(0,gap);
+      bal -= portfolioWithdraw;
     }
-    let firstAgeFourPct=null; for(const r of rows){ if(r.fourPct>=r.spendInfl){ firstAgeFourPct=r.age; break; } }
-    const endAt67=(rows.find(r=>r.age===67)||{}).endBal; const endAt90=(rows.find(r=>r.age===90)||{}).endBal; return { rows, firstAgeFourPct, endAt67, endAt90 };
+
+    rows.push({age,year:yearNow+i,contrib,investReturn:growthOnBal+growthOnContrib,ss,business,spendNeeded:spend,portfolioWithdraw,endBalance:Math.max(0,bal)});
+    if(bal<=0) break;
   }
+  return rows;
+}
 
-  function runAll(){ return scenarios.map(s=> ({ s, sim: simulateScenario(s) })); }
-
-  // ---------- Charts ----------
-  let balChart, fourChart; function palette(i){ const hues=[255,200,160,120,30,330]; const h=hues[i%hues.length]; return { border:`hsl(${h} 80% 48%)`, fill:`hsla(${h},80%,48%,.12)` }; }
-  function renderCharts(sims){
-    const ages=sims[0]?.sim.rows.map(r=>r.age)||[]; const spendSeries=sims[0]?.sim.rows.map(r=>r.spendInfl)||[];
-    const datasetsBal=sims.map((x,i)=>{ const c=palette(i); return { label:x.s.name+' – End Bal', data:x.sim.rows.map(r=>r.endBal), borderColor:c.border, backgroundColor:c.fill, tension:.25, pointRadius:0, borderWidth:3, fill:true }; });
-    if(balChart) balChart.destroy(); balChart=new Chart(document.getElementById('balChart'),{ type:'line', data:{ labels:ages, datasets:datasetsBal }, options:{ responsive:true, interaction:{mode:'index',intersect:false}, plugins:{ legend:{labels:{boxWidth:14,boxHeight:14}}, tooltip:{callbacks:{label:ctx=>`${ctx.dataset.label}: ${fmt$(ctx.parsed.y)}`}} }, scales:{ y:{ ticks:{ callback:v=> '$'+(v/1_000_000).toFixed(1)+'M'} } } }});
-    const datasetsFour=[ { label:'Spending (infl.)', data:spendSeries, borderDash:[6,6], borderWidth:3, tension:.25, pointRadius:0, fill:false, borderColor:'hsl(220 10% 30%)' } ].concat(
-      sims.map((x,i)=>{ const c=palette(i); return { label:x.s.name+' – 4% income', data:x.sim.rows.map(r=>r.fourPct), borderColor:c.border, backgroundColor:c.fill, borderWidth:3, tension:.25, pointRadius:0 }; }) );
-    if(fourChart) fourChart.destroy(); fourChart=new Chart(document.getElementById('fourChart'),{ type:'line', data:{ labels:ages, datasets:datasetsFour }, options:{ responsive:true, interaction:{mode:'index',intersect:false}, plugins:{ legend:{labels:{boxWidth:14,boxHeight:14}}, tooltip:{callbacks:{label:ctx=>`${ctx.dataset.label}: ${fmt$(ctx.parsed.y)}`}} }, scales:{ y:{ ticks:{ callback:v=> fmt$(v) } } } }});
+function gather(){
+  return {
+    currentAge: val('currentAge'),
+    currentBalance: val('currentBalance'),
+    monthlyContribution: val('monthlyContribution'),
+    return: val('expectedReturn')/100,
+    inflation: val('inflation')/100,
+    oneTime: val('oneTime'),
+    retirementAge: val('retirementAge'),
+    spending: val('spending'),
+    earlyExtra: val('earlyExtra'),
+    earlyYears: val('earlyYears'),
+    includeSS: document.getElementById('includeSS').checked,
+    ssAge: val('ssAge'),
+    ssAnnual: val('ssAnnual'),
+    mortPmt: val('mortPmt'),
+    mortEnds: val('mortEnds'),
+    endAge: val('endAge'),
+    rule: val('rule')/100,
+    businessIncome: 0,
+    businessEnds: 67,
   }
+}
 
-  // ---------- Tables ----------
-  function renderTables(sims){
-    const root=document.getElementById('tables'); root.innerHTML='';
-    sims.forEach(({s,sim})=>{
-      const card=document.createElement('div'); card.className='glass rounded-3xl p-6';
-      const head=document.createElement('div'); head.className='flex items-center justify-between mb-2';
-      head.innerHTML=`<h3 class="font-semibold">${s.name}</h3><div class="text-sm text-slate-700">4% ≥ spend: <strong>${sim.firstAgeFourPct ?? '–'}</strong> • End bal @67: <strong>${fmt$(sim.endAt67)}</strong> • End bal @90: <strong>${fmt$(sim.endAt90)}</strong></div>`;
-      const wrap=document.createElement('div'); wrap.className='overflow-auto max-h-[420px] rounded-2xl border border-white/60 bg-white/80';
-      const headers=["Age","Start Bal","Contrib","Settlement","Spend (infl.)","Mortgage","Business","Social Sec","Return","Net Withdrawal","End Bal","4%"];
-      let html='<table class="w-full text-sm">'; html+='<thead class="table-head"><tr>'+headers.map(h=>`<th class="text-left p-2">${h}</th>`).join('')+'</tr></thead><tbody>';
-      html+=sim.rows.map(r=>`<tr class="border-b border-white/60">`+
-        `<td class="p-2">${r.age}</td>`+
-        `<td class="p-2">${fmt$(r.startBal)}</td>`+
-        `<td class="p-2">${fmt$(r.contrib)}</td>`+
-        `<td class="p-2">${fmt$(r.settlement)}</td>`+
-        `<td class="p-2">${fmt$(r.spendInfl)}</td>`+
-        `<td class="p-2">${fmt$(r.mortgageAdd)}</td>`+
-        `<td class="p-2">${fmt$(r.bizIncome)}</td>`+
-        `<td class="p-2">${fmt$(r.socialSec)}</td>`+
-        `<td class="p-2">${fmt$(r.investReturn)}</td>`+
-        `<td class="p-2">${fmt$(r.netWithdrawal)}</td>`+
-        `<td class="p-2 font-semibold">${fmt$(r.endBal)}</td>`+
-        `<td class="p-2">${fmt$(r.fourPct)}</td>`+
-      `</tr>`).join(''); html+='</tbody></table>'; wrap.innerHTML=html; card.appendChild(head); card.appendChild(wrap); root.appendChild(card);
-    });
+function run(){
+  const base=gather();
+  const early={...base, retirementAge: Math.min(base.retirementAge,50), earlyExtra:25000, earlyYears:7};
+  const biz={...base, retirementAge: Math.min(base.retirementAge,52), businessIncome:14000, businessEnds:67};
+  const baseRows=project(base), earlyRows=project(early), bizRows=project(biz);
+  renderKpis(baseRows, base);
+  renderTable(baseRows, base);
+  renderChart([baseRows, earlyRows, bizRows]);
+}
+
+function renderKpis(rows, base){
+  const atRet = rows.find(r=>r.age===base.retirementAge);
+  const at67 = rows.find(r=>r.age===67);
+  const age4 = rows.find(r=> (r.endBalance*base.rule)>=base.spending );
+  document.getElementById('kpiRet').textContent = atRet?money(atRet.endBalance):'—';
+  document.getElementById('kpi67').textContent = at67?money(at67.endBalance):'—';
+  document.getElementById('kpi4').textContent = age4?age4.age:'—';
+}
+
+function renderTable(rows, base){
+  const tb=document.querySelector('#table tbody'); tb.innerHTML='';
+  rows.forEach(r=>{
+    const tr=document.createElement('tr');
+    tr.innerHTML = `<td>${r.year}</td><td>${r.age}</td>
+      <td>${money(r.contrib)}</td><td>${money(r.investReturn)}</td><td>${money(r.ss)}</td>
+      <td>${money(r.business)}</td><td>${money(r.spendNeeded)}</td><td>${money(r.portfolioWithdraw)}</td>
+      <td>${money(r.endBalance*base.rule)}</td><td><b>${money(r.endBalance)}</b></td>`;
+    tb.appendChild(tr);
+  });
+}
+
+function renderChart(series){
+  const svg=document.getElementById('chart'); svg.innerHTML='';
+  const w=900,h=300,pad=36; // simple SVG line chart
+  const colors=['#2563eb','#0ea5e9','#10b981'];
+  let ages=[...new Set(series.flat().map(r=>r.age))].sort((a,b)=>a-b);
+  const maxY=Math.max(...series.flat().map(r=>r.endBalance),1);
+  const x=age=> pad + ( (age-ages[0])/(ages[ages.length-1]-ages[0]||1) )*(w-2*pad);
+  const y=val=> h-pad - (val/maxY)*(h-2*pad);
+  // axes
+  const ax=document.createElementNS('http://www.w3.org/2000/svg','path');
+  ax.setAttribute('d',`M${pad},${h-pad} L${w-pad},${h-pad} M${pad},${h-pad} L${pad},${pad}`);
+  ax.setAttribute('stroke','#cbd5e1'); ax.setAttribute('fill','none'); svg.appendChild(ax);
+  // y labels
+  for(let i=0;i<=4;i++){
+    const val=maxY*i/4; const yy=y(val);
+    const l=document.createElementNS('http://www.w3.org/2000/svg','text');
+    l.setAttribute('x','6'); l.setAttribute('y',yy+4); l.setAttribute('font-size','10'); l.setAttribute('fill','#64748b');
+    l.textContent = '$'+Math.round(val/100000)/10+'M'; svg.appendChild(l);
+    const g=document.createElementNS('http://www.w3.org/2000/svg','line');
+    g.setAttribute('x1',pad); g.setAttribute('x2',w-pad); g.setAttribute('y1',yy); g.setAttribute('y2',yy); g.setAttribute('stroke','#e2e8f0'); g.setAttribute('stroke-dasharray','3,3'); svg.appendChild(g);
   }
+  // series lines
+  series.forEach((rows,si)=>{
+    const d=rows.map((r,idx)=> (idx? 'L':'M')+x(r.age)+','+y(r.endBalance)).join(' ');
+    const p=document.createElementNS('http://www.w3.org/2000/svg','path');
+    p.setAttribute('d',d); p.setAttribute('fill','none'); p.setAttribute('stroke',colors[si]); p.setAttribute('stroke-width','2');
+    svg.appendChild(p);
+  });
+}
 
-  // ---------- Summary Cards ----------
-  function updateSummary(sims){
-    // Earliest retirement age across scenarios
-    const withAge = sims.map(x=>({name:x.s.name, age:x.sim.firstAgeFourPct})).filter(x=>x.age!=null);
-    const earliest = withAge.sort((a,b)=>a.age-b.age)[0];
-    $('#summaryRetireAge').textContent = earliest ? `${earliest.age}` : '–';
-    $('#summaryFourPct').textContent = earliest ? earliest.name : '–';
+function loadPresets(){
+  try{ return JSON.parse(localStorage.getItem('rse-presets')||'{}'); }catch(e){ return {}; }
+}
+function storePresets(p){ localStorage.setItem('rse-presets', JSON.stringify(p)); }
+function defaultPresets(){
+  return {
+    base: { retirementAge:52, earlyExtra:20000, earlyYears:5, monthlyContribution:4500, oneTime:150000, spending:70000, expectedReturn:7, inflation:2.5, ssAge:67, ssAnnual:65000, businessIncome:0, businessEnds:67 },
+    early:{ retirementAge:50, earlyExtra:25000, earlyYears:7, monthlyContribution:3500, oneTime:150000, spending:70000, expectedReturn:7, inflation:2.5, ssAge:67, ssAnnual:65000, businessIncome:0, businessEnds:67 },
+    biz:  { retirementAge:52, earlyExtra:15000, earlyYears:3,  monthlyContribution:4500, oneTime:150000, spending:70000, expectedReturn:7, inflation:2.5, ssAge:67, ssAnnual:65000, businessIncome:14000, businessEnds:67 }
+  };
+}
+function applyPresetVals(vals){
+  if(vals.retirementAge!=null) setVal('retirementAge', vals.retirementAge);
+  if(vals.earlyExtra!=null) setVal('earlyExtra', vals.earlyExtra);
+  if(vals.earlyYears!=null) setVal('earlyYears', vals.earlyYears);
+  if(vals.monthlyContribution!=null) setVal('monthlyContribution', vals.monthlyContribution);
+  if(vals.oneTime!=null) setVal('oneTime', vals.oneTime);
+  if(vals.spending!=null) setVal('spending', vals.spending);
+  if(vals.expectedReturn!=null) setVal('expectedReturn', vals.expectedReturn);
+  if(vals.inflation!=null) setVal('inflation', vals.inflation);
+  if(vals.ssAge!=null) setVal('ssAge', vals.ssAge);
+  if(vals.ssAnnual!=null) setVal('ssAnnual', vals.ssAnnual);
+}
+function preset(which){
+  const p = { ...defaultPresets(), ...loadPresets() };
+  const vals = p[which] || p.base;
+  applyPresetVals(vals);
+  run();
+}
+function savePreset(which){
+  const p = { ...defaultPresets(), ...loadPresets() };
+  // capture current inputs
+  p[which] = {
+    retirementAge: val('retirementAge'),
+    earlyExtra: val('earlyExtra'),
+    earlyYears: val('earlyYears'),
+    monthlyContribution: val('monthlyContribution'),
+    oneTime: val('oneTime'),
+    spending: val('spending'),
+    expectedReturn: val('expectedReturn'),
+    inflation: val('inflation'),
+    ssAge: val('ssAge'),
+    ssAnnual: val('ssAnnual'),
+    businessIncome: which==='biz' ? 14000 : 0,
+    businessEnds: 67,
+  };
+  storePresets(p);
+  alert('Saved current inputs to the "'+(which==='base'?'Base':which==='early'?'Early‑Spend':'Business‑Bridge')+'" preset.');
+}
 
-    // Highest balances at 67 & 90
-    const best67 = sims.map(x=>({name:x.s.name, v:x.sim.endAt67||-Infinity})).sort((a,b)=>b.v-a.v)[0];
-    const best90 = sims.map(x=>({name:x.s.name, v:x.sim.endAt90||-Infinity})).sort((a,b)=>b.v-a.v)[0];
-    $('#summaryBal67').textContent = best67 && isFinite(best67.v) ? fmt$(best67.v) : '–';
-    $('#summaryBal90').textContent = best90 && isFinite(best90.v) ? fmt$(best90.v) : '–';
-  }
-
-  // ---------- Render ----------
-  function rerender(){
-    renderScenarioEditors();
-    const sims = runAll();
-    renderCharts(sims);
-    renderTables(sims);
-    updateSummary(sims);
-  }
-
-  // Boot
-  function hydrateInputs(){ Object.entries(inputs).forEach(([k,v])=>{ const el=document.getElementById(k); if(el) el.value=v; }); }
-  hydrateInputs();
-  rerender();
-})();
+// first paint
+run();
 </script>
 </body>
 </html>
