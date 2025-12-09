@@ -1,0 +1,342 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>Card Dungeon – Companion</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <link rel="icon" href="data:image/x-icon;base64,AAABAAEAEBAAAAEAIABoBAAAFgAAACgAAAAQAAAAIAAAAAEAGAAAAAAAQAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA////AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=">
+  <link rel="stylesheet" href="styles.css">
+
+</head>
+<body>
+  <div class="ambient"></div>
+  <main class="app-shell">
+    <header class="hud">
+      <div class="title-group">
+        <span class="sigil">⌬</span>
+        <div>
+          <p class="title">Card Dungeon</p>
+          <p class="subtitle">Companion</p>
+        </div>
+      </div>
+      <span id="difficultyBadge" class="badge-pill diff-badge">⚔ Normal</span>
+      <span id="variantBadge" class="badge-pill variant-badge visible">Variants: None</span>
+      <div class="hud-controls">
+        <button id="menuToggleBtn" class="ghost menu-toggle" aria-label="Open menu" aria-expanded="false">☰</button>
+      </div>
+    </header>
+    <p id="setupNote" class="sr-only"></p>
+
+    <section class="layout">
+      <article class="panel dungeon" id="dungeonCard">
+        <!-- Top: room meta -->
+        <div class="room-head">
+          <div class="room-meta">
+            <div class="badge-row">
+              <span class="badge-pill room-tag">Room</span>
+              <span class="badge-pill" id="roomTypeTag">—</span>
+            </div>
+            <p class="summary-text">
+              Room <span id="roomIndex">0</span> / <span id="roomTotal">0</span>
+            </p>
+          </div>
+          <div class="glyph">🜏</div>
+        </div>
+
+        <!-- Room summary + event stacked, but short -->
+        <div id="roomSummary" class="room-summary">Awaiting the first draw.</div>
+
+        <!-- Enemy row: art + stats side-by-side -->
+        <div class="enemy-row">
+          <div id="roomEvent" class="room-event" aria-live="polite"></div>
+          <div class="enemy-portrait-shell">
+            <img id="enemyPortrait" class="enemy-portrait hidden" alt="" />
+          </div>
+
+          <div id="enemySummary" class="enemy-dash">
+            <div class="badge-row">
+              <span class="badge-pill badge-danger">Danger</span>
+            </div>
+            <div class="hp-bar">
+              <span class="hp-fill" style="width:100%"></span>
+            </div>
+          </div>
+        </div>
+
+        <!-- Boons -->
+        <div id="boonOptions" class="boon-options" aria-live="polite">
+          <p class="boon-label">Boon Room — Choose a blessing</p>
+          <div class="boon-grid">
+            <button type="button" class="boon-option" data-effect="stat">
+              ⚔ +1 Random Stat
+            </button>
+            <button type="button" class="boon-option" data-effect="heal">
+              💧 Heal 2 HP / Hero
+            </button>
+            <button type="button" class="boon-option" data-effect="fate">
+              ✦ +1 Shared Fate
+            </button>
+            <button type="button" class="boon-option" data-effect="empower">
+              ⚡ Empower Next Round
+            </button>
+          </div>
+        </div>
+
+      </article>
+
+      <article class="panel party" id="partyCard">
+        <div class="panel-head">
+          <span>Party</span>
+          <div class="badge-row" style="gap:8px;align-items:center;">
+            <span class="muted">HP • Stats</span>
+            <span class="badge-pill" id="sharedFate">0 Fate</span>
+          </div>
+        </div>
+        <div id="playersContainer" class="players-grid"></div>
+      </article>
+
+      <article class="panel log" id="logCard">
+        <div class="panel-head">
+          <span>Log</span>
+          <button id="clearLogBtn" class="ghost small" style="padding:6px 10px;font-size:0.7rem;letter-spacing:0.18em;">Clear</button>
+        </div>
+        <div id="log" class="log"></div>
+      </article>
+    </section>
+  </main>
+
+  <div id="menuPanel" class="menu-panel" aria-hidden="true">
+    <div class="menu-inner">
+      <div class="menu-head">
+        <div>
+          <p class="title">Command</p>
+          <p class="subtitle">Menu</p>
+        </div>
+        <button id="closeMenuBtn" class="ghost small" aria-label="Close menu">✕</button>
+      </div>
+      <div class="menu-section">
+        <section class="start-options" id="startOptions">
+          <label class="menu-label" for="numPlayers">
+            Players
+            <select id="numPlayers">
+              <option value="1">1</option>
+              <option value="2" selected>2</option>
+              <option value="3">3</option>
+              <option value="4">4</option>
+            </select>
+          </label>
+          <div class="difficulty-controls" id="difficultyControls">
+            <div class="label">Difficulty</div>
+            <div class="segmented">
+              <button type="button" class="diff-btn active" data-difficulty="normal">Normal</button>
+              <button type="button" class="diff-btn" data-difficulty="hard">Hard</button>
+              <button type="button" class="diff-btn" data-difficulty="dire">Dire</button>
+            </div>
+          </div>
+          <details class="variants-panel" id="variantPanel">
+            <summary>Variants</summary>
+            <div class="variant-options">
+              <label><input type="checkbox" id="variantSpike" /> Spike Rounds</label>
+              <label><input type="checkbox" id="variantAccelerated" /> Accelerated Dungeon</label>
+              <label><input type="checkbox" id="variantIronSoul" /> Iron Soul Mode</label>
+            </div>
+          </details>
+        </section>
+      </div>
+      <div class="menu-section">
+        <button id="startBtn" class="primary menu-start" type="button">Start</button>
+      </div>
+      <div class="menu-section">
+        <div class="menu-buttons">
+          <button id="rulesBtn" class="ghost small" aria-label="Rules">Rules</button>
+          <button id="logToggleBtn" class="ghost small">Log</button>
+          <button id="devToggle" class="ghost dev-toggle" aria-label="Toggle Dev Panel">⚙︎ Dev</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <aside id="devPanel" class="dev-panel" aria-hidden="true">
+    <div class="dev-section">
+      <h4>Run Controls</h4>
+      <button id="devNextRoom">Skip to Next Room</button>
+      <button id="devResolveAuto">Resolve Combat Auto</button>
+      <button id="devKillEnemy">Kill Enemy</button>
+    </div>
+    <div class="dev-section">
+      <h4>Party Controls</h4>
+      <button id="devFullHeal">Full Heal Party</button>
+      <button id="devWoundParty">Wound Party</button>
+      <div id="devHeroStats" class="readout"></div>
+    </div>
+    <div class="dev-section">
+      <h4>Experimental</h4>
+      <div id="devDifficultyInfo" class="readout"></div>
+      <div id="devVariantInfo" class="readout"></div>
+      <div class="dev-section">
+        <button id="devForceNormal">Force Normal</button>
+        <button id="devForceHard">Force Hard</button>
+        <button id="devForceDire">Force Dire</button>
+      </div>
+    </div>
+    <div class="dev-section">
+      <h4>Dev Tweaks</h4>
+      <button id="devCopySettings" class="ghost small" style="align-self:flex-start;padding:6px 10px;font-size:0.7rem;letter-spacing:0.18em;">Copy Tweaks</button>
+      <button id="devResetSettings" class="ghost small" style="align-self:flex-start;padding:6px 10px;font-size:0.7rem;letter-spacing:0.18em;">Reset Tweaks</button>
+      <div class="dev-grid">
+        <label>
+          Room Count
+          <div class="lever-row">
+            <input type="range" class="lever" id="devRoomCount" min="1" max="12" step="1" value="6" />
+            <span class="lever-value" id="devRoomCountVal">6</span>
+          </div>
+        </label>
+        <label>
+          Enemy Base Damage
+          <div class="lever-row">
+            <input type="range" class="lever" id="devEnemyDamage" min="-5" max="25" step="1" value="0" />
+            <span class="lever-value" id="devEnemyDamageVal">0</span>
+          </div>
+        </label>
+        <label>
+          Enemy Hit Chance
+          <div class="lever-row">
+            <input type="range" class="lever" id="devEnemyHit" min="-0.5" max="1" step="0.05" value="0" />
+            <span class="lever-value" id="devEnemyHitVal">0</span>
+          </div>
+        </label>
+        <label>
+          Boss HP Multiplier
+          <div class="lever-row">
+            <input type="range" class="lever" id="devBossHpMult" min="0.5" max="3" step="0.1" value="1" />
+            <span class="lever-value" id="devBossHpMultVal">1</span>
+          </div>
+        </label>
+        <label>
+          Hero HP Modifier
+          <div class="lever-row">
+            <input type="range" class="lever" id="devHeroHpMod" min="-15" max="20" step="1" value="0" />
+            <span class="lever-value" id="devHeroHpModVal">0</span>
+          </div>
+        </label>
+        <label>
+          Recover Strength
+          <div class="lever-row">
+            <input type="range" class="lever" id="devRecoverStrength" min="0.5" max="3" step="0.1" value="1" />
+            <span class="lever-value" id="devRecoverStrengthVal">1</span>
+          </div>
+        </label>
+        <label>
+          Guard Multiplier
+          <div class="lever-row">
+            <input type="range" class="lever" id="devGuardEffectiveness" min="0.5" max="3" step="0.1" value="1" />
+            <span class="lever-value" id="devGuardEffectivenessVal">1</span>
+          </div>
+        </label>
+        <label>
+          Shared Fate
+          <div class="lever-row" style="align-items:center;gap:8px;">
+            <input type="checkbox" id="devSharedFateAuto" checked />
+            <span class="muted" style="font-size:0.7rem;">Auto</span>
+          </div>
+          <div class="lever-row">
+            <input type="range" class="lever" id="devSharedFateOverride" min="0" max="12" step="1" value="4" disabled />
+            <span class="lever-value" id="devSharedFateOverrideVal">auto</span>
+          </div>
+        </label>
+        <label>
+          Underdog Threshold
+          <div class="lever-row">
+            <input type="range" class="lever" id="devUnderdogThreshold" min="5" max="18" step="1" value="10" />
+            <span class="lever-value" id="devUnderdogThresholdVal">10</span>
+          </div>
+        </label>
+        <label>
+          Force Room Type
+          <select id="devForceRoomType">
+            <option value="auto">Auto</option>
+            <option value="enemy">Enemy</option>
+            <option value="trap">Trap</option>
+            <option value="boon">Boon Room</option>
+            <option value="treasure">Treasure</option>
+            <option value="boss">Boss</option>
+          </select>
+        </label>
+      </div>
+    </div>
+    <div class="dev-section">
+      <h4>RNG & Simulation</h4>
+      <div id="devDungeonInfo" class="readout"></div>
+      <button id="devRerollDungeon">Reroll Before Start</button>
+      <button id="devQuickSim">Quick Sim ×10</button>
+      <div id="devSimResult" class="readout"></div>
+    </div>
+  </aside>
+
+  <div id="rulesOverlay" class="overlay">
+    <div class="overlay-content">
+      <div class="panel-head">
+        <span>Rules Reference</span>
+        <button id="closeRulesBtn" class="overlay-close ghost" style="padding:6px 10px;">Close</button>
+      </div>
+      <h3>Setup</h3>
+      <ul>
+        <li>Two physical decks on hand.</li>
+        <li>App handles hero stats, rooms, enemies.</li>
+        <li>Final room is always a Boss.</li>
+      </ul>
+      <h3>Hero Stats</h3>
+      <ul>
+        <li>Might: increases attack power.</li>
+        <li>Agility: dodges hits.</li>
+        <li>Lore: ritual heal once per room.</li>
+      </ul>
+      <h3>Turn Flow</h3>
+      <ol>
+        <li>Pick an action (Attack / Recover / Guard / Hold).</li>
+        <li>Select the poker hand you played.</li>
+        <li>Tap Resolve to apply effects.</li>
+      </ol>
+      <h3>Actions</h3>
+      <ul>
+        <li>Attack: hand determines damage.</li>
+        <li>Recover: heal self instead of attacking.</li>
+        <li>Guard: mitigate enemy damage with combos.</li>
+        <li>Hold: save cards, no action.</li>
+      </ul>
+      <h3>Shared Fate</h3>
+      <ul>
+        <li>Spend 1 Fate to revive a hero at 1 HP.</li>
+        <li>If Fate is 0 and a hero dies, the run ends.</li>
+      </ul>
+      <h3>Room Types</h3>
+      <ul>
+        <li>Enemy: fight one foe.</li>
+        <li>Boss: final room fight.</li>
+        <li>Trap: Lore save to avoid damage.</li>
+        <li>Boon Room: hearts trigger a party blessing.</li>
+        <li>Treasure: +1 Might or Agility.</li>
+      </ul>
+      <h3>Boon Blessings</h3>
+      <ul>
+        <li>+1 to a random stat on a random hero.</li>
+        <li>Restore 2 HP to all living heroes.</li>
+        <li>Add 1 Shared Fate token to the pool.</li>
+        <li>Empower the next Attack or Guard one tier.</li>
+      </ul>
+      <h3>Difficulty & Variants</h3>
+      <ul>
+        <li>Normal: balanced.</li>
+        <li>Hard: tougher foes, weaker heals, less Shared Fate.</li>
+        <li>Dire: brutal stats, no healing rooms.</li>
+        <li>Spike Rounds: every 3rd round hits harder.</li>
+        <li>Accelerated Dungeon: rooms 5‑6 are elites.</li>
+        <li>Iron Soul Mode: Recover disabled, guard first.</li>
+      </ul>
+      <p class="muted-note">Dev Panel is for testing only and can change numbers mid-run.</p>
+    </div>
+  </div>
+
+  <script src="app.js"></script>
+</body>
+</html>
