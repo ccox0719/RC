@@ -1737,16 +1737,16 @@
         return;
       }
 
-      setRoomEventMessage(
-        `Trap TN ${tn} — did you meet or stay under the target?\nConfirm outcome:`
-      );
+      const trapPrompt = `Trap TN ${tn} — did you meet or stay under the target? Confirm outcome:`;
+      setRoomEventMessage(trapPrompt);
       if (roomEventEl) {
         roomEventEl.innerHTML = `
-          <div>Trap TN ${tn} — did you meet or stay under the target?</div>
-          <div style="margin-top:8px;">Confirm outcome:</div>
-          <div style="display:flex; gap:8px; margin-top:6px; flex-wrap:wrap;">
+          <div style="display:flex;flex-direction:column;gap:4px;">
+            <span style="white-space:nowrap;">${trapPrompt}</span>
+            <div style="display:flex; gap:8px; flex-wrap:wrap; margin-top:2px;">
             <button type="button" class="secondary trap-pass">Disarmed</button>
             <button type="button" class="secondary trap-fail">Failed</button>
+          </div>
           </div>
         `;
         const passBtn = roomEventEl.querySelector('.trap-pass');
