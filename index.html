@@ -20,7 +20,6 @@
       </div>
       <span id="difficultyBadge" class="badge-pill diff-badge">⚔ Normal</span>
       <span id="variantBadge" class="badge-pill variant-badge visible">Variants: None</span>
-      <span id="handSizeBadge" class="badge-pill">Hand: 5</span>
       <div class="hud-controls">
         <button id="menuToggleBtn" class="ghost menu-toggle" aria-label="Open menu" aria-expanded="false">☰</button>
       </div>
@@ -31,16 +30,9 @@
       <article class="panel dungeon" id="dungeonCard">
         <!-- Top: room meta -->
         <div class="room-head">
-          <div class="room-meta">
-            <div class="badge-row">
-              <span class="badge-pill room-tag">Room</span>
-              <span class="badge-pill" id="roomTypeTag">—</span>
-            </div>
-            <p class="summary-text">
-              Room <span id="roomIndex">0</span> / <span id="roomTotal">0</span>
-            </p>
-          </div>
-          <div class="glyph">🜏</div>
+          <p class="summary-text">
+            Room <span id="roomIndex">0</span> / <span id="roomTotal">0</span>
+          </p>
         </div>
 
         <!-- Room summary + event stacked, but short -->
@@ -87,8 +79,9 @@
       <article class="panel party" id="partyCard">
         <div class="panel-head">
           <span>Party</span>
-          <div class="badge-row" style="gap:8px;align-items:center;">
+        <div class="badge-row" style="gap:8px;align-items:center;">
             <span class="muted">HP • Stats</span>
+            <span id="handSizeBadge" class="badge-pill card-badge">🂡 5</span>
           </div>
         </div>
         <div id="playersContainer" class="players-grid"></div>

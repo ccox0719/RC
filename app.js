@@ -218,7 +218,6 @@
     const roomEventEl = document.getElementById('roomEvent');
     const enemyPortraitEl = document.getElementById('enemyPortrait');
     const enemySummaryEl = document.getElementById('enemySummary');
-    const roomTypeTag = document.getElementById('roomTypeTag');
     const difficultyDropdown = document.getElementById('difficultyDropdown');
     const difficultyToggle = document.getElementById('difficultyToggle');
     const playerDropdown = document.getElementById('playerDropdown');
@@ -775,7 +774,7 @@
       if (!handBadgeEl) return;
       const extra = game.handBonusActive ? 1 : 0;
       const queued = game.handBonusReady && !game.handBonusActive ? ' (bonus queued)' : '';
-      handBadgeEl.textContent = `Hand: ${BASE_HAND_SIZE + extra}${queued}`;
+      handBadgeEl.textContent = `🂡 ${BASE_HAND_SIZE + extra}${queued}`;
     }
 
     function activateHandBonusForCombat() {
@@ -798,7 +797,6 @@
         enemySummaryEl.textContent = '';
         setEnemyPortrait(null);
         setCombatMode(false);
-        roomTypeTag.textContent = '—';
         return;
       }
 
@@ -807,7 +805,6 @@
       const type = getRoomType(card, isLast);
       let displayType = type === 'boon' && currentDifficulty === 'dire' ? 'enemy' : type;
       if (type === 'enemyHeart') displayType = 'enemy';
-      roomTypeTag.textContent = roomTypeLabel(type);
 
       const suitNotes = {
         enemy: '♠ Spades — Standard Enemies (goblins, skeletons, beasts)',
