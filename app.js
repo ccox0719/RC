@@ -80,29 +80,42 @@
     const game = {
       numPlayers: 0,
       players: [],
-      sharedFate: 0,
       dungeonDeck: [],
       dungeonRooms: [],
       roomIndex: -1,
       enemy: null,
       over: false,
       boonEmpowerNextRound: false,
-      roomEventMessage: ''
+      roomEventMessage: '',
+      handBonusReady: false,
+      handBonusActive: false
     };
 
+    const BASE_HAND_SIZE = 5;
     const COMBO_DAMAGE = {
       none: 0,
-      high: 3,
-      pair: 6,
-      twoPair: 8,
-      three: 12,
-      straight: 15,
-      flush: 18,
-      full: 25,
-      four: 35,
-      straightFlush: 50
+      high: 2,
+      pair: 4,
+      twoPair: 5,
+      three: 6,
+      straight: 7,
+      flush: 8,
+      full: 9,
+      straightFlush: 10,
+      blackjack: 11
     };
-    const BOON_ATTACK_ORDER = ['none', 'high', 'pair', 'twoPair', 'three', 'straight', 'flush', 'full', 'four', 'straightFlush'];
+    const BOON_ATTACK_ORDER = [
+      'none',
+      'high',
+      'pair',
+      'twoPair',
+      'three',
+      'straight',
+      'flush',
+      'full',
+      'straightFlush',
+      'blackjack'
+    ];
     const BOON_GUARD_ORDER = ['high', 'pair', 'three', 'full'];
     const BOON_STAT_KEYS = ['might', 'agility', 'lore'];
     const BOON_STAT_LABELS = {
@@ -118,7 +131,6 @@
         enemyDamageBonus: 0,
         bossHpMultiplier: 1,
         healReduction: 0,
-        sharedFateOffset: 0,
         enemyHitChanceBonus: 0,
         disableHealingRooms: false
       },
@@ -128,7 +140,6 @@
         enemyDamageBonus: 1,
         bossHpMultiplier: 1.2,
         healReduction: 1,
-        sharedFateOffset: -1,
         enemyHitChanceBonus: 0,
         disableHealingRooms: false
       },
@@ -138,7 +149,6 @@
         enemyDamageBonus: 2,
         bossHpMultiplier: 1,
         healReduction: 0,
-        sharedFateOffset: -2,
         enemyHitChanceBonus: 0.1,
         disableHealingRooms: true
       }
@@ -169,7 +179,6 @@
     let devHeroHpModifier = 0;
     let devRecoverStrength = 1;
     let devGuardEffectiveness = 1;
-    let devStartingSharedFate = null;
     let devUnderdogThreshold = 10;
     let devForcedRoomType = 'auto';
     const variantInputMap = {
@@ -204,7 +213,7 @@
 
     const roomIndexEl = document.getElementById('roomIndex');
     const roomTotalEl = document.getElementById('roomTotal');
-    const sharedFateEl = document.getElementById('sharedFate');
+    const handBadgeEl = document.getElementById('handSizeBadge');
     const roomSummaryEl = document.getElementById('roomSummary');
     const roomEventEl = document.getElementById('roomEvent');
     const enemyPortraitEl = document.getElementById('enemyPortrait');
@@ -256,7 +265,6 @@
     const devQuickSimBtn = document.getElementById('devQuickSim');
     const devCopySettingsBtn = document.getElementById('devCopySettings');
     const devResetSettingsBtn = document.getElementById('devResetSettings');
-    const devSharedFateAuto = document.getElementById('devSharedFateAuto');
     const devSimResult = document.getElementById('devSimResult');
     const devRoomCountInput = document.getElementById('devRoomCount');
     const devEnemyDamageInput = document.getElementById('devEnemyDamage');
@@ -265,7 +273,6 @@
     const devHeroHpInput = document.getElementById('devHeroHpMod');
     const devRecoverInput = document.getElementById('devRecoverStrength');
     const devGuardInput = document.getElementById('devGuardEffectiveness');
-    const devSharedFateInput = document.getElementById('devSharedFateOverride');
     const devUnderdogInput = document.getElementById('devUnderdogThreshold');
     const devForceRoomTypeInput = document.getElementById('devForceRoomType');
     const devTweaksInfo = document.getElementById('devTweaksInfo');
@@ -457,10 +464,14 @@
           setRoomEventMessage('Boon: Every hero healed +2 HP');
           break;
         }
-        case 'fate':
-          game.sharedFate += 1;
-          addLog('Boon grants +1 Shared Fate to the pool.', 'badge-success');
-          setRoomEventMessage('Boon: +1 Shared Fate added');
+        case 'bonus':
+          if (!game.handBonusReady) {
+            game.handBonusReady = true;
+            addLog('Boon grants +1 bonus card for the next hand.', 'badge-success');
+            setRoomEventMessage('Boon: +1 bonus card queued for the next draw');
+          } else {
+            addLog('Boon attempts to grant a bonus card, but one is already queued.', 'small');
+          }
           break;
         case 'empower':
           game.boonEmpowerNextRound = true;
@@ -534,12 +545,6 @@
       devHeroHpModifier = readNumberInput(devHeroHpInput, devHeroHpModifier);
       devRecoverStrength = Math.max(0.1, readNumberInput(devRecoverInput, devRecoverStrength));
       devGuardEffectiveness = Math.max(0.1, readNumberInput(devGuardInput, devGuardEffectiveness));
-      devStartingSharedFate = (() => {
-        if (devSharedFateAuto && devSharedFateAuto.checked) return null;
-        if (!devSharedFateInput) return devStartingSharedFate;
-        const v = readNumberInput(devSharedFateInput, devStartingSharedFate);
-        return Number.isInteger(v) ? v : devStartingSharedFate;
-      })();
       devUnderdogThreshold = Math.max(1, Math.round(readNumberInput(devUnderdogInput, devUnderdogThreshold)));
       devForcedRoomType = devForceRoomTypeInput ? devForceRoomTypeInput.value : devForcedRoomType;
       updateLeverDisplays();
@@ -578,7 +583,6 @@
       setVal('devHeroHpModVal', devHeroHpModifier);
       setVal('devRecoverStrengthVal', devRecoverStrength.toFixed(2));
       setVal('devGuardEffectivenessVal', devGuardEffectiveness.toFixed(2));
-      setVal('devSharedFateOverrideVal', devSharedFateAuto && devSharedFateAuto.checked ? 'auto' : devStartingSharedFate);
       setVal('devUnderdogThresholdVal', devUnderdogThreshold);
     }
 
@@ -591,8 +595,6 @@
         devHeroHpModifier,
         devRecoverStrength,
         devGuardEffectiveness,
-        devStartingSharedFate,
-        devSharedFateAuto: devSharedFateAuto ? devSharedFateAuto.checked : true,
         devUnderdogThreshold,
         devForcedRoomType
       };
@@ -611,7 +613,6 @@
       devHeroHpModifier = 0;
       devRecoverStrength = 1;
       devGuardEffectiveness = 1;
-      devStartingSharedFate = null;
       devUnderdogThreshold = 10;
       devForcedRoomType = 'auto';
       if (devRoomCountInput) devRoomCountInput.value = devRoomCount;
@@ -621,11 +622,6 @@
       if (devHeroHpInput) devHeroHpInput.value = devHeroHpModifier;
       if (devRecoverInput) devRecoverInput.value = devRecoverStrength;
       if (devGuardInput) devGuardInput.value = devGuardEffectiveness;
-      if (devSharedFateAuto) devSharedFateAuto.checked = true;
-      if (devSharedFateInput) {
-        devSharedFateInput.disabled = true;
-        devSharedFateInput.value = '';
-      }
       if (devUnderdogInput) devUnderdogInput.value = devUnderdogThreshold;
       if (devForceRoomTypeInput) devForceRoomTypeInput.value = 'auto';
       updateDevOverrides();
@@ -653,11 +649,6 @@
       assignVal(devHeroHpInput, 'devHeroHpModifier');
       assignVal(devRecoverInput, 'devRecoverStrength');
       assignVal(devGuardInput, 'devGuardEffectiveness');
-      assignVal(devSharedFateInput, 'devStartingSharedFate');
-      if (devSharedFateAuto && typeof saved.devSharedFateAuto === 'boolean') {
-        devSharedFateAuto.checked = saved.devSharedFateAuto;
-        devSharedFateInput.disabled = saved.devSharedFateAuto;
-      }
       assignVal(devUnderdogInput, 'devUnderdogThreshold');
       if (devForceRoomTypeInput && saved.devForcedRoomType) {
         devForceRoomTypeInput.value = saved.devForcedRoomType;
@@ -712,7 +703,6 @@
       devHeroHpInput,
       devRecoverInput,
       devGuardInput,
-      devSharedFateInput,
       devUnderdogInput,
       devForceRoomTypeInput
     ].forEach(input => {
@@ -781,8 +771,21 @@
       document.body.classList.toggle('combat-active', active);
     }
 
-    function renderSharedFate() {
-      sharedFateEl.textContent = `${game.sharedFate} Fate`;
+    function renderHandBadge() {
+      if (!handBadgeEl) return;
+      const extra = game.handBonusActive ? 1 : 0;
+      const queued = game.handBonusReady && !game.handBonusActive ? ' (bonus queued)' : '';
+      handBadgeEl.textContent = `Hand: ${BASE_HAND_SIZE + extra}${queued}`;
+    }
+
+    function activateHandBonusForCombat() {
+      if (game.handBonusReady) {
+        game.handBonusActive = true;
+        game.handBonusReady = false;
+        addLog('Bonus card active this round — draw 6 cards.', 'badge-success');
+      } else {
+        game.handBonusActive = false;
+      }
     }
 
     function renderRoom() {
@@ -836,6 +839,7 @@
           const dmg = base + depthBonus;
           const portrait = pickEnemyPortrait();
           game.enemy = { hp, maxHp: hp, dmg, type: displayType, portrait };
+          activateHandBonusForCombat();
         }
         const hpPercent = Math.max(0, Math.min(100, Math.round((game.enemy.hp / game.enemy.maxHp) * 100)));
         enemySummaryEl.innerHTML = `
@@ -862,6 +866,7 @@
           shell.innerHTML = `<div class="room-icon">${type === 'trap' ? '♣' : type === 'boon' ? '♥' : type === 'treasure' ? '♦' : '🜏'}</div>`;
         }
         setCombatMode(false);
+        game.handBonusActive = false;
         if (type === 'trap') {
           const tn = card.value + Math.floor(game.roomIndex / 2);
           initTrapState(tn);
@@ -910,8 +915,8 @@
           <option value="straight">Straight</option>
           <option value="flush">Flush</option>
           <option value="full">Full House</option>
-          <option value="four">Four of a Kind</option>
           <option value="straightFlush">Straight Flush</option>
+          <option value="blackjack">Blackjack 21</option>
         </select>
       `;
     }
@@ -961,7 +966,7 @@
     function refreshUI() {
       renderPlayers();
       renderRoom();
-      renderSharedFate();
+      renderHandBadge();
       dungeonCard.style.display = '';
       partyCard.style.display = '';
       logCard.style.display = '';
@@ -987,18 +992,9 @@
       addLog(`Hero ${idx + 1} takes ${amount} damage (${sourceLabel}). HP now ${p.hp}.`, 'badge-danger');
 
       if (p.hp <= 0) {
-        if (game.sharedFate > 0) {
-          game.sharedFate -= 1;
-          p.hp = 1;
-          addLog(
-            `Hero ${idx + 1} would fall, but Shared Fate is spent. Shared Fate now ${game.sharedFate}, hero revived to 1 HP.`,
-            'badge-danger'
-          );
-        } else {
-          addLog(`Hero ${idx + 1} has fallen and Shared Fate is 0. The run is over.`, 'badge-danger');
-          game.over = true;
-          unlockRunOptions();
-        }
+        addLog(`Hero ${idx + 1} has fallen. The run is over.`, 'badge-danger');
+        game.over = true;
+        unlockRunOptions();
       }
     }
 
@@ -1034,11 +1030,12 @@
       const cfg = DIFFICULTY_CONFIG[currentDifficulty];
       game.numPlayers = n;
       game.players = [];
-      game.sharedFate = 0;
       game.dungeonDeck = shuffle(makeDeck());
       game.dungeonRooms = [];
       game.roomIndex = -1;
       game.enemy = null;
+      game.handBonusReady = false;
+      game.handBonusActive = false;
       game.over = false;
       autoResolving = false;
       heroSelections = {};
@@ -1081,10 +1078,6 @@
       for (let i = 0; i < roomCount; i++) {
         game.dungeonRooms.push(drawCard(game.dungeonDeck));
       }
-
-      const baseSharedFate = devStartingSharedFate !== null ? devStartingSharedFate : 2 * n;
-      const sharedFateBase = Math.max(0, baseSharedFate + cfg.sharedFateOffset);
-      game.sharedFate = currentDifficulty === 'dire' ? 0 : sharedFateBase;
 
       const activeVariantList = Object.entries(activeVariants)
         .filter(([, on]) => on)
@@ -1220,12 +1213,6 @@
     if (devQuickSimBtn) devQuickSimBtn.addEventListener('click', devQuickSim);
     if (devCopySettingsBtn) devCopySettingsBtn.addEventListener('click', copyDevTweaks);
     if (devResetSettingsBtn) devResetSettingsBtn.addEventListener('click', resetDevTweaks);
-    if (devSharedFateAuto && devSharedFateInput) {
-      devSharedFateAuto.addEventListener('change', () => {
-        devSharedFateInput.disabled = devSharedFateAuto.checked;
-        updateDevOverrides();
-      });
-    }
     const trapLoreSlider = document.getElementById('trapLoreAdjust');
     if (trapLoreSlider) {
       trapLoreSlider.addEventListener('input', () => {
@@ -1272,6 +1259,7 @@
           type,
           hitChanceBonus
         };
+        activateHandBonusForCombat();
       }
 
       const enemy = game.enemy;
@@ -1514,6 +1502,12 @@
 
     function handleEnemyDefeat(type) {
       addLog(`${type === 'boss' ? 'Boss' : 'Enemy'} is defeated!`, 'badge-success');
+      game.handBonusActive = false;
+      if (type !== 'boss') {
+        game.handBonusReady = true;
+        addLog('Enemy defeat awards +1 bonus card for the next hand.', 'badge-success');
+        setRoomEventMessage('Bonus card earned! Draw 5 + 1 cards next round.');
+      }
       game.enemy = null;
       setEnemyPortrait(null);
       setCombatMode(false);
@@ -1577,7 +1571,6 @@
           `Hero HP Mod: ${devHeroHpModifier >= 0 ? '+' : ''}${devHeroHpModifier}`,
           `Recover Str: ×${devRecoverStrength.toFixed(2)}`,
           `Guard Mult: ×${devGuardEffectiveness.toFixed(2)}`,
-          `Shared Fate: ${devStartingSharedFate !== null ? devStartingSharedFate : 'auto'}`,
           `Underdog @< ${devUnderdogThreshold}`,
           `Force Room: ${devForcedRoomType}`
         ];
@@ -1594,7 +1587,6 @@
         heroHpModifier: devHeroHpModifier,
         recoverStrength: devRecoverStrength,
         guardEffectiveness: devGuardEffectiveness,
-        sharedFate: devSharedFateAuto && devSharedFateAuto.checked ? 'auto' : devStartingSharedFate,
         underdogThreshold: devUnderdogThreshold,
         forcedRoomType: devForcedRoomType
       };
@@ -1705,9 +1697,6 @@
       winChance += devHeroHpModifier * 0.005;
       winChance += (devRecoverStrength - 1) * 0.05;
       winChance += (devGuardEffectiveness - 1) * 0.03;
-      winChance += (devSharedFateAuto && devSharedFateAuto.checked)
-        ? 0.02
-        : (devStartingSharedFate || 0) * 0.01;
       winChance = Math.max(0.05, Math.min(0.95, winChance));
 
       let wins = 0;

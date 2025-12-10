@@ -20,6 +20,7 @@
       </div>
       <span id="difficultyBadge" class="badge-pill diff-badge">⚔ Normal</span>
       <span id="variantBadge" class="badge-pill variant-badge visible">Variants: None</span>
+      <span id="handSizeBadge" class="badge-pill">Hand: 5</span>
       <div class="hud-controls">
         <button id="menuToggleBtn" class="ghost menu-toggle" aria-label="Open menu" aria-expanded="false">☰</button>
       </div>
@@ -72,8 +73,8 @@
             <button type="button" class="boon-option" data-effect="heal">
               💧 Heal 2 HP / Hero
             </button>
-            <button type="button" class="boon-option" data-effect="fate">
-              ✦ +1 Shared Fate
+            <button type="button" class="boon-option" data-effect="bonus">
+              🎴 +1 Bonus Card
             </button>
             <button type="button" class="boon-option" data-effect="empower">
               ⚡ Empower Next Round
@@ -88,7 +89,6 @@
           <span>Party</span>
           <div class="badge-row" style="gap:8px;align-items:center;">
             <span class="muted">HP • Stats</span>
-            <span class="badge-pill" id="sharedFate">0 Fate</span>
           </div>
         </div>
         <div id="playersContainer" class="players-grid"></div>
@@ -233,17 +233,6 @@
           </div>
         </label>
         <label>
-          Shared Fate
-          <div class="lever-row" style="align-items:center;gap:8px;">
-            <input type="checkbox" id="devSharedFateAuto" checked />
-            <span class="muted" style="font-size:0.7rem;">Auto</span>
-          </div>
-          <div class="lever-row">
-            <input type="range" class="lever" id="devSharedFateOverride" min="0" max="12" step="1" value="4" disabled />
-            <span class="lever-value" id="devSharedFateOverrideVal">auto</span>
-          </div>
-        </label>
-        <label>
           Underdog Threshold
           <div class="lever-row">
             <input type="range" class="lever" id="devUnderdogThreshold" min="5" max="18" step="1" value="10" />
@@ -303,10 +292,45 @@
         <li>Guard: mitigate enemy damage with combos.</li>
         <li>Hold: save cards, no action.</li>
       </ul>
-      <h3>Shared Fate</h3>
+      <h3>CORE FIX #1 — Increased Hand Size</h3>
       <ul>
-        <li>Spend 1 Fate to revive a hero at 1 HP.</li>
-        <li>If Fate is 0 and a hero dies, the run ends.</li>
+        <li>Draw up to 5 cards every round.</li>
+        <li>Defeating an enemy grants +1 bonus card for the next hand.</li>
+        <li>More cards unlock bigger combos without forcing spammy builds.</li>
+      </ul>
+      <h3>CORE FIX #2 — Lower Damage Values</h3>
+      <table class="damage-table">
+        <thead>
+          <tr>
+            <th>Combo</th>
+            <th>Damage</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr><td>High Card</td><td>2</td></tr>
+          <tr><td>Pair</td><td>4</td></tr>
+          <tr><td>Two Pair</td><td>5</td></tr>
+          <tr><td>Three of a Kind</td><td>6</td></tr>
+          <tr><td>Straight</td><td>7</td></tr>
+          <tr><td>Flush</td><td>8</td></tr>
+          <tr><td>Full House</td><td>9</td></tr>
+          <tr><td>Straight Flush</td><td>10</td></tr>
+          <tr><td>Blackjack 21</td><td>11</td></tr>
+        </tbody>
+      </table>
+      <p>Why this works</p>
+      <ul>
+        <li>Damage still feels rewarding.</li>
+        <li>Bigger hands create more variety.</li>
+        <li>No single combo breaks the game.</li>
+        <li>Scaling is smooth across dungeon levels.</li>
+        <li>Stronger hands still feel rewarding.</li>
+        <li>Bad hands still contribute something.</li>
+      </ul>
+      <h3>CORE FIX #3 — Fate is gone</h3>
+      <ul>
+        <li>Runs end when the last hero hits 0 HP; there is no Shared Fate pool.</li>
+        <li>Every heal, guard, and combo decision must carry the whole party.</li>
       </ul>
       <h3>Room Types</h3>
       <ul>
@@ -320,13 +344,13 @@
       <ul>
         <li>+1 to a random stat on a random hero.</li>
         <li>Restore 2 HP to all living heroes.</li>
-        <li>Add 1 Shared Fate token to the pool.</li>
+        <li>Gain +1 bonus card for the next hand.</li>
         <li>Empower the next Attack or Guard one tier.</li>
       </ul>
       <h3>Difficulty & Variants</h3>
       <ul>
         <li>Normal: balanced.</li>
-        <li>Hard: tougher foes, weaker heals, less Shared Fate.</li>
+        <li>Hard: tougher foes and weaker heals.</li>
         <li>Dire: brutal stats, no healing rooms.</li>
         <li>Spike Rounds: every 3rd round hits harder.</li>
         <li>Accelerated Dungeon: rooms 5‑6 are elites.</li>
