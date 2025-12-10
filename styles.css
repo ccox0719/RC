@@ -32,6 +32,10 @@ body {
   align-items: stretch;
 }
 
+body.compact-view {
+  font-size: 0.9rem;
+}
+
 .ambient {
   position: fixed;
   inset: 0;
@@ -52,6 +56,90 @@ body {
   display: flex;
   flex-direction: column;
   gap: 12px;
+}
+
+body.compact-view .app-shell {
+  padding: 10px;
+  gap: 6px;
+}
+
+body.compact-view .hud,
+body.compact-view .panel,
+body.compact-view .menu-inner,
+body.compact-view .dev-panel,
+body.compact-view .overlay-content {
+  padding: 8px;
+  gap: 6px;
+  border-width: 0.5px;
+  box-shadow: none;
+}
+
+body.compact-view .hud {
+  padding: 6px 10px;
+}
+
+body.compact-view .panel {
+  gap: 8px;
+}
+
+body.compact-view .players-grid {
+  gap: 8px;
+}
+
+body.compact-view .player-card {
+  padding: 8px;
+  gap: 6px;
+}
+
+body.compact-view .player-card::after {
+  inset: 0.5px;
+}
+
+body.compact-view .hero-center {
+  gap: 6px;
+  padding: 6px;
+}
+
+body.compact-view .hero-actions button {
+  font-size: 0.65rem;
+  padding: 4px 6px;
+}
+
+body.compact-view .hero-hand {
+  gap: 4px;
+}
+
+body.compact-view .stat-row {
+  gap: 6px 8px;
+}
+
+body.compact-view .stat-pill {
+  padding: 6px 8px;
+  font-size: 0.7rem;
+  letter-spacing: 0.15em;
+}
+
+body.compact-view .room-summary,
+body.compact-view .enemy-row,
+body.compact-view .boon-options,
+body.compact-view .enemy-portrait-shell {
+  padding: 8px;
+}
+
+body.compact-view .boon-grid {
+  gap: 6px;
+}
+
+body.compact-view .log {
+  padding: 8px;
+}
+
+body.compact-view .hud-controls {
+  gap: 4px;
+}
+
+body.compact-view .compact-toggle {
+  padding: 4px 8px;
 }
 
 /* HUD */
@@ -102,6 +190,12 @@ body {
   gap: 8px;
   flex-wrap: wrap;
   margin-left: auto;
+}
+.compact-toggle {
+  border-radius: 12px;
+  padding: 6px 10px;
+  font-size: 0.65rem;
+  letter-spacing: 0.18em;
 }
 .badge-pill {
   padding: 4px 10px;

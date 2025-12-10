@@ -160,6 +160,7 @@
       accelerated: 'Accelerated Dungeon',
       ironSoul: 'Iron Soul Mode'
     };
+    const COMPACT_VIEW_STORAGE_KEY = 'compactViewEnabled';
     let autoResolving = false;
     let heroSelections = {};
     let devRoomCount = 6;
@@ -228,6 +229,7 @@
     const menuToggleBtn = document.getElementById('menuToggleBtn');
     const menuPanel = document.getElementById('menuPanel');
     const closeMenuBtn = document.getElementById('closeMenuBtn');
+    const compactToggleBtn = document.getElementById('compactToggleBtn');
     const difficultyButtons = document.querySelectorAll('[data-difficulty]');
     const difficultyBadge = document.getElementById('difficultyBadge');
     const difficultyControls = document.getElementById('difficultyControls');
@@ -313,6 +315,30 @@
         toggleMenu(false);
       }
     });
+
+    function setCompactMode(enabled, persist = true) {
+      document.body.classList.toggle('compact-view', enabled);
+      if (compactToggleBtn) {
+        compactToggleBtn.setAttribute('aria-pressed', enabled.toString());
+      }
+      if (!persist) return;
+      try {
+        localStorage.setItem(COMPACT_VIEW_STORAGE_KEY, enabled ? 'true' : 'false');
+      } catch (error) {
+        // Ignore storage errors.
+      }
+    }
+
+    compactToggleBtn?.addEventListener('click', () => {
+      setCompactMode(!document.body.classList.contains('compact-view'));
+    });
+
+    try {
+      const storedCompact = localStorage.getItem(COMPACT_VIEW_STORAGE_KEY);
+      setCompactMode(storedCompact === 'true', false);
+    } catch (error) {
+      setCompactMode(false, false);
+    }
 
     if (logToggleBtn && logCard) {
       logToggleBtn.addEventListener('click', () => {
