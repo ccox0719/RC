@@ -2,7 +2,8 @@
     const SUITS = ['♠', '♥', '♦', '♣'];
     const RANKS = ['A','2','3','4','5','6','7','8','9','10','J','Q','K'];
     const ENEMY_PORTRAITS = [];
-    const GENERATED_BULK_PORTRAITS = Array.from({ length: 6 }, (_, i) => `enemies/enemy${i + 1}.png`);
+  const GENERATED_BULK_PORTRAITS = Array.from({ length: 6 }, (_, i) => `enemies/enemy${i + 1}.png`);
+  const BOSS_PORTRAITS = Array.from({ length: 6 }, (_, i) => `enemies/boss/boss${i + 1}.png`);
     let enemyPortraitPool = [];
     refreshEnemyPortraitPool();
 
@@ -562,6 +563,12 @@ const STORE_ITEMS = [
       if (!enemyPortraitPool.length) return null;
       const index = Math.floor(Math.random() * enemyPortraitPool.length);
       return enemyPortraitPool[index];
+    }
+
+    function bossPortraitForIndex(roomIndex) {
+      if (!BOSS_PORTRAITS.length) return null;
+      const idx = Math.max(0, Math.min(BOSS_PORTRAITS.length - 1, roomIndex % BOSS_PORTRAITS.length));
+      return BOSS_PORTRAITS[idx];
     }
 
     function setEnemyPortrait(src, label = '') {
@@ -1497,12 +1504,20 @@ const STORE_ITEMS = [
       renderHeroCoins();
     }
 
+    function clearStoreModalFocus() {
+      if (!storeModal) return;
+      const active = document.activeElement;
+      if (active instanceof HTMLElement && storeModal.contains(active)) {
+        active.blur();
+      }
+    }
+
     function openStore(autoAdvance = false) {
       if (storeDisabled || storeOpen || !storeModal) return;
       storeOpen = true;
       storePendingAdvance = autoAdvance;
       storeModal.classList.add('visible');
-      storeModal.setAttribute('aria-hidden', 'false');
+      storeModal.removeAttribute('aria-hidden');
       renderStoreItems();
       resetStoreSelection();
       renderStoreHeroTargets();
@@ -1513,6 +1528,7 @@ const STORE_ITEMS = [
       if (!storeOpen || !storeModal) return;
       storeOpen = false;
       storeModal.classList.remove('visible');
+      clearStoreModalFocus();
       storeModal.setAttribute('aria-hidden', 'true');
       resetStoreSelection();
       if (storePendingAdvance) {
@@ -1637,7 +1653,9 @@ const STORE_ITEMS = [
           const depthBonus = Math.floor(game.roomIndex / 2);
           const base = displayType === 'boss' ? BOSS_DMG_BASE : NORMAL_DMG_BASE;
           const dmg = base + depthBonus;
-          const portrait = pickEnemyPortrait();
+          const portrait = displayType === 'boss'
+            ? bossPortraitForIndex(game.roomIndex)
+            : pickEnemyPortrait();
           game.enemy = { hp, maxHp: hp, dmg, type: displayType, portrait };
           activateHandBonusForCombat();
         }
