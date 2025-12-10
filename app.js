@@ -1737,7 +1737,9 @@
         return;
       }
 
-      setRoomEventMessage(`Trap TN ${tn} — did you meet or stay under the target?`);
+      setRoomEventMessage(
+        `Trap TN ${tn} — did you meet or stay under the target?\nConfirm outcome:`
+      );
       if (roomEventEl) {
         roomEventEl.innerHTML = `
           <div>Trap TN ${tn} — did you meet or stay under the target?</div>
