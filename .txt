@@ -1,0 +1,27 @@
+I would like traps to cause hand size to decrease by 1 if failed. Here’s a short, clean adjustment you can plug into your AI dev prompt or drop straight into your notes:
+
+⸻
+
+Adjustment: 12-Room Default Dungeon
+
+Change the core dungeon generation to:
+	•	Default rooms = 12
+	•	Room distribution (simple version):
+	•	Rooms 1–3 → Standard enemies / traps
+	•	Rooms 4–5 → Mix of standard + elite enemies
+	•	Room 6 → Auto opens Store
+	•	Rooms 7–9 → Harder enemies + elite spikes
+	•	Room 10 → Auto opens Store
+	•	Room 11 → Elite enemy
+	•	Room 12 → Boss
+
+Implementation note:
+Set the global/default value:
+
+const DEFAULT_ROOM_COUNT = 12;
+
+And ensure the Dev Panel “Room Count” field starts at 12 instead of 6.
+
+⸻
+
+If you want, I can also generate the tiny code snippet to drop into app.js to override the default cleanly.
