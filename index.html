@@ -6,6 +6,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <link rel="icon" href="data:image/x-icon;base64,AAABAAEAEBAAAAEAIABoBAAAFgAAACgAAAAQAAAAIAAAAAEAGAAAAAAAQAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA////AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=">
   <link rel="stylesheet" href="styles.css">
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.css">
 </head>
 <body class="compact-view">
   <div class="ambient"></div>
@@ -77,12 +78,18 @@
       </article>
 
       <article class="panel party" id="partyCard">
-        <div class="panel-head">
-          <span>Party</span>
-        <div class="badge-row" style="gap:8px;align-items:center;">
-            <span class="muted">HP • Stats</span>
-            <span id="handSizeBadge" class="badge-pill card-badge">🂡 5</span>
+        <div class="panel-head party-head">
+          <span class="panel-head-title">Party</span>
+          <div class="panel-head-controls">
+            <button id="confirmActionsBtn" class="primary compact" disabled>Confirm</button>
+            <button id="useLuckyFlipBtn" class="ghost compact" type="button" hidden>Lucky Flip</button>
           </div>
+          <span class="muted stats-label">HP • Stats</span>
+          <span id="handSizeBadge" class="badge-pill card-badge">🂡 5</span>
+          <span id="chipBadge" class="badge-pill chip-badge">
+            <span class="chip-icon" aria-hidden="true"></span>
+            <span class="chip-count">0</span>
+          </span>
         </div>
         <div id="playersContainer" class="players-grid"></div>
       </article>
@@ -136,6 +143,19 @@
         </section>
       </div>
       <div class="menu-section">
+        <h4>Economy</h4>
+        <div class="economy-options">
+          <label class="economy-option">
+            <input type="radio" name="economyMode" value="table" checked />
+            Poker Chips at Table
+          </label>
+          <label class="economy-option">
+            <input type="radio" name="economyMode" value="app" />
+            App Coin Tracker
+          </label>
+        </div>
+      </div>
+      <div class="menu-section">
         <button id="startBtn" class="primary menu-start" type="button">Start</button>
       </div>
       <div class="menu-section">
@@ -154,6 +174,7 @@
       <button id="devNextRoom">Skip to Next Room</button>
       <button id="devResolveAuto">Resolve Combat Auto</button>
       <button id="devKillEnemy">Kill Enemy</button>
+      <button id="devClearSave" class="ghost small">Clear Save</button>
     </div>
     <div class="dev-section">
       <h4>Party Controls</h4>
@@ -226,6 +247,24 @@
           </div>
         </label>
         <label>
+          Lore Override
+          <div class="lever-row">
+            <input type="range" class="lever" id="devLoreOverride" min="0" max="20" step="1" value="0" />
+            <span class="lever-value" id="devLoreOverrideVal">auto</span>
+          </div>
+        </label>
+        <label>
+          Insight Override
+          <div class="lever-row">
+            <input type="range" class="lever" id="devInsightOverride" min="0" max="5" step="1" value="0" />
+            <span class="lever-value" id="devInsightOverrideVal">auto</span>
+          </div>
+        </label>
+        <label>
+          <span class="muted" style="letter-spacing:0.12em; font-size:0.65rem;">Show Insight animations</span>
+          <input type="checkbox" id="devInsightAnimToggle" checked />
+        </label>
+        <label>
           Underdog Threshold
           <div class="lever-row">
             <input type="range" class="lever" id="devUnderdogThreshold" min="5" max="18" step="1" value="10" />
@@ -244,6 +283,17 @@
           </select>
         </label>
       </div>
+      <div id="devTweaksInfo" class="readout"></div>
+    </div>
+    <div class="dev-section">
+      <h4>Chip Economy</h4>
+      <button id="devGiveChips">Give +5 Chips</button>
+      <button id="devOpenStore" class="ghost small">Open Store</button>
+      <label class="dev-toggle-row">
+        <input type="checkbox" id="devDisableStore" />
+        Disable Store in This Run
+      </label>
+      <div id="devChipReadout" class="readout">Party Chips: 0</div>
     </div>
     <div class="dev-section">
       <h4>RNG & Simulation</h4>
@@ -253,6 +303,22 @@
       <div id="devSimResult" class="readout"></div>
     </div>
   </aside>
+
+  <div id="storeModal" class="store-modal" aria-hidden="true">
+    <div class="store-shell">
+      <div class="store-head">
+        <span>Merchant's Camp</span>
+        <button id="storeCloseBtn" class="ghost small" type="button">Close</button>
+      </div>
+      <div class="store-chip-row">
+        <span>Party Chips:</span>
+        <strong id="storeChipCount">0</strong>
+      </div>
+      <div id="storeEconomyNote" class="store-note">Use Poker Chips at the table; the app only describes rewards.</div>
+      <div id="storeItems" class="store-grid"></div>
+      <div id="storeHeroTargets" class="store-targets hidden"></div>
+    </div>
+  </div>
 
   <div id="rulesOverlay" class="overlay">
     <div class="overlay-content">
@@ -285,45 +351,11 @@
         <li>Guard: mitigate enemy damage with combos.</li>
         <li>Hold: save cards, no action.</li>
       </ul>
-      <h3>CORE FIX #1 — Increased Hand Size</h3>
+      <h3>Lore (Insight)</h3>
       <ul>
-        <li>Draw up to 5 cards every round.</li>
-        <li>Defeating an enemy grants +1 bonus card for the next hand.</li>
-        <li>More cards unlock bigger combos without forcing spammy builds.</li>
-      </ul>
-      <h3>CORE FIX #2 — Lower Damage Values</h3>
-      <table class="damage-table">
-        <thead>
-          <tr>
-            <th>Combo</th>
-            <th>Damage</th>
-          </tr>
-        </thead>
-        <tbody>
-          <tr><td>High Card</td><td>2</td></tr>
-          <tr><td>Pair</td><td>4</td></tr>
-          <tr><td>Two Pair</td><td>5</td></tr>
-          <tr><td>Three of a Kind</td><td>6</td></tr>
-          <tr><td>Straight</td><td>7</td></tr>
-          <tr><td>Flush</td><td>8</td></tr>
-          <tr><td>Full House</td><td>9</td></tr>
-          <tr><td>Straight Flush</td><td>10</td></tr>
-          <tr><td>Blackjack 21</td><td>11</td></tr>
-        </tbody>
-      </table>
-      <p>Why this works</p>
-      <ul>
-        <li>Damage still feels rewarding.</li>
-        <li>Bigger hands create more variety.</li>
-        <li>No single combo breaks the game.</li>
-        <li>Scaling is smooth across dungeon levels.</li>
-        <li>Stronger hands still feel rewarding.</li>
-        <li>Bad hands still contribute something.</li>
-      </ul>
-      <h3>CORE FIX #3 — Fate is gone</h3>
-      <ul>
-        <li>Runs end when the last hero hits 0 HP; there is no Shared Fate pool.</li>
-        <li>Every heal, guard, and combo decision must carry the whole party.</li>
+        <li>Each round: Gain Insight = floor(Lore ÷ 2).</li>
+        <li>Spend Insight to discard and redraw cards.</li>
+        <li>Use anytime, including traps.</li>
       </ul>
       <h3>Room Types</h3>
       <ul>
@@ -348,6 +380,12 @@
         <li>Spike Rounds: every 3rd round hits harder.</li>
         <li>Accelerated Dungeon: rooms 5‑6 are elites.</li>
         <li>Iron Soul Mode: Recover disabled, guard first.</li>
+      </ul>
+      <h3>Coins & Economy</h3>
+      <p>This game uses a simple currency called Coins. At setup choose how you track them.</p>
+      <ul>
+        <li><strong>Option 1: Poker Chips at the Table</strong> — follow the app's rewards/cost cues but move real chips by hand.</li>
+        <li><strong>Option 2: App Coin Tracker</strong> — the app records each hero's coins, auto-adds rewards, and auto-deducts Store purchases.</li>
       </ul>
       <p class="muted-note">Dev Panel is for testing only and can change numbers mid-run.</p>
     </div>
