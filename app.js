@@ -1742,11 +1742,11 @@
       if (roomEventEl) {
         roomEventEl.innerHTML = `
           <div style="display:flex;flex-direction:column;gap:4px;">
-            <span style="white-space:nowrap;">${trapPrompt}</span>
+            <span>${trapPrompt}</span>
             <div style="display:flex; gap:8px; flex-wrap:wrap; margin-top:2px;">
-            <button type="button" class="secondary trap-pass">Disarmed</button>
-            <button type="button" class="secondary trap-fail">Failed</button>
-          </div>
+              <button type="button" class="secondary trap-pass">Disarmed</button>
+              <button type="button" class="secondary trap-fail">Failed</button>
+            </div>
           </div>
         `;
         const passBtn = roomEventEl.querySelector('.trap-pass');
