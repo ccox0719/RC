@@ -679,7 +679,7 @@ select {
   display: flex;
   flex-direction: column;
   gap: 4px;
-  align-items: flex-start;
+  align-items: center;
   opacity: 0;
   transition: opacity 0.2s ease;
   width: 100%;
@@ -688,6 +688,7 @@ select {
   word-break: break-word;
   overflow-wrap: anywhere;
   max-width: 100%;
+  text-align: center;
 }
 .room-event.visible { opacity: 1; }
 
