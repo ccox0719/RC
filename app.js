@@ -55,6 +55,7 @@
     function getRoomType(card, isLast) {
       if (devForcedRoomType && devForcedRoomType !== 'auto') return devForcedRoomType;
       if (isLast) return 'boss';
+      if (card && card.roomType) return card.roomType;
       switch (card.suit) {
         case '♠': return 'enemy';
         case '♥': return 'enemyHeart';
@@ -99,15 +100,21 @@
       lastChanceTokens: 0,
       nextRoundExtraCards: 0,
       currentRoundExtraCards: 0,
+      handSizePenalty: 0,
       guardBraceActive: false,
       luckyFlipReady: false,
       luckyFlipUsedThisRoom: false,
       roomDamageTaken: false,
       roomStyleReward: 0,
       roomStyleCombo: '',
-      lastRewardedRoomIndex: -1
+      lastRewardedRoomIndex: -1,
+      traitLegendLoggedRoom: -1,
+      handSizeStack: 0
     };
 
+const ROOM_BACKGROUND_GRADIENT = 'linear-gradient(145deg, rgba(14, 16, 32, 0.96), rgba(8, 10, 22, 0.96))';
+const DEFAULT_ROOM_COUNT = 12;
+const TRAP_BG_IMAGE = 'objects/trap.png';
 const BASE_HAND_SIZE = 5;
 const HERO_STARTING_COINS = 5;
 const COMBO_DAMAGE = {
@@ -142,6 +149,22 @@ const BOON_STAT_LABELS = {
   agility: 'Agility',
   lore: 'Lore'
 };
+const RECOVER_HEAL_MAP = {
+  high: 1,
+  pair: 2,
+  twoPair: 4,
+  three: 6,
+  straight: 7,
+  flush: 8,
+  full: 10,
+  straightFlush: 12,
+  blackjack: 14
+};
+
+function recoverLoreMultiplier(hero) {
+  const lore = hero?.lore || 0;
+  return 1 + Math.floor(Math.max(0, lore) / 5);
+}
 const STYLE_REWARD_MAP = {
   three: { value: 1, label: 'Three-of-a-Kind' },
   straight: { value: 2, label: 'Straight' },
@@ -150,12 +173,299 @@ const STYLE_REWARD_MAP = {
   straightFlush: { value: 2, label: 'Straight Flush' },
   blackjack: { value: 1, label: 'Blackjack' }
 };
+const HAND_TYPE_LABELS = {
+  highCard: 'High Card',
+  pair: 'Pair',
+  twoPair: 'Two Pair',
+  threeKind: 'Three of a Kind',
+  straight: 'Straight',
+  flush: 'Flush',
+  fullHouse: 'Full House',
+  straightFlush: 'Straight Flush',
+  blackjack: 'Blackjack'
+};
+const HAND_SHORT_LABELS = {
+  highCard: 'HC',
+  pair: 'P',
+  twoPair: '2P',
+  threeKind: '3K',
+  straight: 'ST',
+  flush: 'FL',
+  fullHouse: 'FH',
+  straightFlush: 'SF',
+  blackjack: 'BJ'
+};
+const INTENT_SYMBOLS = {
+  heavyWindup: '⚡',
+  ignoreGuard: '🛡️',
+  aoePulse: '🌐',
+  defensivePosture: '🛡',
+  enrage: '🔥'
+};
+const FOCUS_ROLE_ICONS = {
+  might: '⚔',
+  agility: '⚡',
+  lore: '💠',
+  balanced: '✦'
+};
+const ENEMY_PROFILE_LIBRARY = [
+  {
+    id: 'goblin-brute',
+    name: 'Goblin Brute',
+    weaknesses: { pair: 1, twoPair: 2 },
+    resistances: { straight: 1 },
+    tells: ['heavyWindup', 'defensivePosture']
+  },
+  {
+    id: 'shadow-wraith',
+    name: 'Shadow Wraith',
+    weaknesses: { flush: 2 },
+    resistances: { pair: 1 },
+    tells: ['ignoreGuard', 'aoePulse']
+  },
+  {
+    id: 'iron-sentinel',
+    name: 'Iron Sentinel',
+    weaknesses: { straight: 1, highCard: 1 },
+    resistances: { flush: 2 },
+    tells: ['defensivePosture']
+  },
+  {
+    id: 'spike-horror',
+    name: 'Spike Horror',
+    weaknesses: { threeKind: 2, straightFlush: 3 },
+    resistances: { twoPair: 1 },
+    tells: ['heavyWindup', 'enrage']
+  }
+];
+const BOSS_PROFILE = {
+  id: 'iron-tyrant',
+  name: 'Iron Tyrant',
+  weaknesses: { straightFlush: 3 },
+  resistances: { fullHouse: 2, flush: 1 },
+  tells: ['heavyWindup', 'enrage', 'ignoreGuard']
+};
+
+const INTENT_EFFECTS = {
+  heavyWindup: {
+    label: 'Heavy Attack',
+    log: 'winds up for a HEAVY ATTACK!',
+    damageBonus: 2,
+    description: 'Next attack deals +2 damage.'
+  },
+  ignoreGuard: {
+    label: 'Ignoring Guard',
+    log: 'prepares to ignore Guard!',
+    ignoreGuard: true
+    ,
+    description: 'Next attack ignores Guard mitigation.'
+  },
+  aoePulse: {
+    label: 'AoE Pulse',
+    log: 'charges an AoE Pulse!',
+    aoe: true
+    ,
+    description: 'This turn hits every living hero.'
+  },
+  defensivePosture: {
+    label: 'Defensive Posture',
+    log: 'slides into a defensive posture.',
+    defensive: true
+    ,
+    description: 'Hero attacks deal 25% less damage this round.'
+  },
+  enrage: {
+    label: 'Enraged',
+    log: 'becomes enraged and grows stronger!',
+    enrageBonus: 1,
+    onAssign: enemy => {
+      enemy.dmg = Math.max(enemy.dmg, 0) + 1;
+    }
+  }
+};
+
+function normalizedHandKey(comboKey) {
+  const MAP = {
+    high: 'highCard',
+    pair: 'pair',
+    twoPair: 'twoPair',
+    three: 'threeKind',
+    straight: 'straight',
+    flush: 'flush',
+    full: 'fullHouse',
+    straightFlush: 'straightFlush',
+    blackjack: 'blackjack'
+  };
+  return MAP[comboKey] || comboKey;
+}
+
+function handDisplayLabel(handKey) {
+  return HAND_TYPE_LABELS[handKey] || handKey;
+}
+
+function cloneEnemyProfile(profile) {
+  if (!profile) return null;
+  return {
+    id: profile.id,
+    name: profile.name,
+    weaknesses: profile.weaknesses ? { ...profile.weaknesses } : {},
+    resistances: profile.resistances ? { ...profile.resistances } : {},
+    tells: profile.tells ? [...profile.tells] : []
+  };
+}
+
+function chooseEnemyProfile(card, type, roomIndex) {
+  if (type === 'boss') {
+    return cloneEnemyProfile(BOSS_PROFILE);
+  }
+  const source = ENEMY_PROFILE_LIBRARY;
+  if (!source.length) return null;
+  const idx = card && typeof card.value === 'number'
+    ? card.value % source.length
+    : (roomIndex % source.length);
+  return cloneEnemyProfile(source[idx]);
+}
+
+function applyWeaknessResistance(damage, profile, handType) {
+  if (!profile) return { damage, weaknessBonus: 0, resistancePenalty: 0 };
+  const weaknessBonus = profile.weaknesses?.[handType] || 0;
+  const resistancePenalty = profile.resistances?.[handType] || 0;
+  const boosted = damage + weaknessBonus;
+  const adjusted = Math.max(0, boosted - resistancePenalty);
+  return {
+    damage: adjusted,
+    weaknessBonus,
+    resistancePenalty
+  };
+}
+
+function handShortLabel(handKey) {
+  return HAND_SHORT_LABELS[handKey] || handDisplayLabel(handKey).split(' ').map(word => word[0]).join('').toUpperCase() || handKey;
+}
+
+function traitBadgeLabel(handKey) {
+  return HAND_SHORT_LABELS[handKey] || handKey.toUpperCase();
+}
+
+function traitBadgeHtml(type, hand, value) {
+  const short = traitBadgeLabel(hand);
+  const symbol = type === 'weakness' ? `+${value}` : `-${value}`;
+  const title = `${type === 'weakness' ? 'Weak vs' : 'Resists'} ${handDisplayLabel(hand)} (${symbol})`;
+  return `<span class="enemy-badge trait-badge trait-${type}" title="${title}">${short}${symbol}</span>`;
+}
+
+function createEnemyTraitBadges(profile) {
+  if (!profile) return '';
+  const weaknessBadges = Object.entries(profile.weaknesses || {})
+    .filter(([, value]) => value > 0)
+    .map(([hand, value]) => traitBadgeHtml('weakness', hand, value));
+  const resistanceBadges = Object.entries(profile.resistances || {})
+    .filter(([, value]) => value > 0)
+    .map(([hand, value]) => traitBadgeHtml('resistance', hand, value));
+  return [...weaknessBadges, ...resistanceBadges].join('');
+}
+
+function logTraitLegend(profile) {
+  if (!profile || game.traitLegendLoggedRoom === game.roomIndex) return;
+  const legend = Object.entries(HAND_SHORT_LABELS)
+    .map(([hand, short]) => `${short}=${HAND_TYPE_LABELS[hand]}`)
+    .join(' · ');
+  addLog(`Weak/Resist shorthand: ${legend}. Weak chips show bonus, resist chips show penalty.`, 'small');
+  game.traitLegendLoggedRoom = game.roomIndex;
+}
+
+function setEnemyIntent(enemy, logIt = false) {
+  if (!enemy || !enemy.profile) return;
+  const tells = enemy.profile.tells || [];
+  if (!tells.length) {
+    enemy.currentIntent = { type: null, label: '', turnsRemaining: 0, extra: null };
+    return;
+  }
+  const nextType = tells[Math.floor(Math.random() * tells.length)];
+  const effect = INTENT_EFFECTS[nextType] || {};
+  enemy.currentIntent = {
+    type: nextType,
+    label: effect.label || nextType,
+    turnsRemaining: effect.duration || 1,
+    extra: effect
+  };
+  if (effect.onAssign) effect.onAssign(enemy);
+  if (logIt && effect.log) {
+    const name = enemy.profile.name || (enemy.type === 'boss' ? 'Boss' : 'Enemy');
+    const detail = effect.description ? ` ${effect.description}` : '';
+    addLog(`${name} ${effect.log}${detail}`, 'badge-warning');
+  }
+}
+
+function enemyIntentLine(enemy) {
+  if (!enemy || !enemy.currentIntent || !enemy.currentIntent.type) return '';
+  const symbol = INTENT_SYMBOLS[enemy.currentIntent.type] || '⚔';
+  return `
+    <div class="enemy-intent-row">
+      ${symbol} Intent: ${enemy.currentIntent.label}
+    </div>
+  `;
+}
+
+function updateEnemySummaryDisplay() {
+  if (!enemySummaryEl || !game.enemy) return;
+  const hpPercent = Math.max(
+    0,
+    Math.min(100, Math.round((game.enemy.hp / game.enemy.maxHp) * 100))
+  );
+  const traitHtml = createEnemyTraitBadges(game.enemy.profile);
+  const intentHtml = enemyIntentLine(game.enemy);
+  const totalRooms = game.dungeonRooms.length || 0;
+  const currentCard = game.dungeonRooms[game.roomIndex];
+  const isLast = game.roomIndex === totalRooms - 1;
+  const cardTypeKey = currentCard ? getRoomType(currentCard, isLast) : game.enemy.type;
+  const cardTypeLabel = (displayTypeFor(cardTypeKey) || 'Enemy').toUpperCase();
+  const rankSuit = currentCard ? `${currentCard.rank}${currentCard.suit}` : '—';
+  const metaHtml = `
+    <div class="enemy-meta-row">
+      <span class="room-label">Room ${Math.max(0, game.roomIndex + 1)} / ${totalRooms}</span>
+      <span class="card-label">
+        <span class="card-rank-suit">Card: ${rankSuit}</span>
+        <span class="card-type-pill">${cardTypeLabel}</span>
+      </span>
+    </div>
+  `;
+  enemySummaryEl.innerHTML = `
+    ${metaHtml}
+    <div class="enemy-stats-row">
+      <div class="cluster cluster-left">
+        <span class="enemy-badge enemy-tag">${game.enemy.type === 'boss' ? 'Boss' : 'Enemy'}</span>
+        <span class="enemy-badge enemy-dmg">⚔ ${game.enemy.dmg}</span>
+      </div>
+      <div class="cluster cluster-mid">
+        ${traitHtml || '<span class="enemy-badge empty">No traits</span>'}
+      </div>
+      <div class="cluster cluster-right">
+        <span class="enemy-badge enemy-hp">&#9829; ${Math.max(0, game.enemy.hp)}</span>
+      </div>
+    </div>
+    ${intentHtml}
+    <div class="hp-bar"><span class="hp-fill" style="width:${hpPercent}%;"></span></div>
+  `;
+}
+
+const DEFAULT_STORE_ROOMS = [6, 10];
+const DEFAULT_ROOM_PLAN = [
+  { start: 0, end: 2, pool: ['enemy', 'trap'] },
+  { start: 3, end: 4, pool: ['enemy', 'enemyHeart'] },
+  { start: 5, end: 5, pool: ['enemy'] },
+  { start: 6, end: 8, pool: ['enemyHeart', 'enemyHeart', 'enemy'] },
+  { start: 9, end: 9, pool: ['enemy'] },
+  { start: 10, end: 10, pool: ['enemyHeart'] }
+];
 const KEEN_EDGE_COMBOS = new Set(['three', 'straight', 'flush', 'full', 'straightFlush', 'blackjack']);
 const ECONOMY_MODES = {
   table: 'table',
   app: 'app'
 };
+const DEV_TWEAKS_VERSION = 3;
 let economyMode = ECONOMY_MODES.table;
+const COIN_REWARD_SCALE = 0.5;
 const STORE_ITEMS = [
   {
     key: 'battleTonic',
@@ -335,18 +645,20 @@ const STORE_ITEMS = [
       ironSoul: 'Iron Soul Mode'
     };
     let heroSelections = {};
-    let devRoomCount = 6;
-    let devEnemyBaseDamage = 0;
-    let devEnemyHitChance = 0;
-    let devBossHpMultiplier = 1;
-    let devHeroHpModifier = 0;
-    let devRecoverStrength = 1;
-    let devGuardEffectiveness = 1;
-    let devLoreOverride = 0;
-    let devInsightOverride = 0;
-    let devShowInsightAnim = true;
-    let devUnderdogThreshold = 10;
-    let devForcedRoomType = 'auto';
+  let devRoomCount = DEFAULT_ROOM_COUNT;
+  let devEnemyBaseDamage = 0;
+  let devEnemyHitChance = 0;
+  let devBossHpMultiplier = 1;
+  let devHeroHpModifier = 0;
+  let devRecoverStrength = 1;
+  let devGuardEffectiveness = 1;
+  let devLoreOverride = 0;
+  let devInsightOverride = 0;
+  let devShowInsightAnim = true;
+  let devUnderdogThreshold = 10;
+  let devForcedRoomType = 'auto';
+  let devComboDamageCurve = 1;
+  let devCoinGainMultiplier = 1;
     let storeOpen = false;
     let storePendingAdvance = false;
     let pendingHeroPurchase = null;
@@ -367,7 +679,7 @@ const STORE_ITEMS = [
     const ENRAGE_ACTIVE = true;
     const ENRAGE_MULTIPLIER = 1.25;
     const ENRAGE_TRAP_DAMAGE = 1;
-    const ENRAGE_ELITE_ROOMS = [2, 4];
+    const ENRAGE_ELITE_ROOMS = [6, 7, 8];
     const ENRAGE_HIT_CHANCE_BONUS = 0.05;
 
     // --- DOM elements ----------------------------------------------------
@@ -458,12 +770,18 @@ const STORE_ITEMS = [
     const devHeroHpInput = document.getElementById('devHeroHpMod');
     const devRecoverInput = document.getElementById('devRecoverStrength');
     const devGuardInput = document.getElementById('devGuardEffectiveness');
+    const devComboCurveInput = document.getElementById('devComboCurve');
+    const devCoinGainMultiplierInput = document.getElementById('devCoinGainMultiplier');
     const devLoreOverrideInput = document.getElementById('devLoreOverride');
     const devInsightOverrideInput = document.getElementById('devInsightOverride');
     const devInsightAnimToggle = document.getElementById('devInsightAnimToggle');
     const devUnderdogInput = document.getElementById('devUnderdogThreshold');
     const devForceRoomTypeInput = document.getElementById('devForceRoomType');
     const devTweaksInfo = document.getElementById('devTweaksInfo');
+    const runOverlay = document.getElementById('runOverlay');
+    const runOverlayTitle = document.getElementById('runOverlayTitle');
+    const runOverlayMessage = document.getElementById('runOverlayMessage');
+    const runOverlayButton = document.getElementById('runOverlayButton');
 
     // Rules overlay behaviour
     rulesBtn.addEventListener('click', () => {
@@ -499,6 +817,22 @@ const STORE_ITEMS = [
       if (menuToggleBtn) {
         menuToggleBtn.setAttribute('aria-expanded', show.toString());
       }
+    }
+
+    function showRunOverlay(type, message) {
+      if (!runOverlay) return;
+      runOverlayTitle && (runOverlayTitle.textContent = type === 'victory' ? 'Victory!' : 'Game Over');
+      runOverlayMessage && (runOverlayMessage.textContent = message);
+      runOverlay.classList.toggle('victory', type === 'victory');
+      runOverlay.classList.toggle('gameover', type === 'gameover');
+      runOverlay.classList.add('active');
+      runOverlay.setAttribute('aria-hidden', 'false');
+    }
+
+    function hideRunOverlay() {
+      if (!runOverlay) return;
+      runOverlay.classList.remove('active', 'victory', 'gameover');
+      runOverlay.setAttribute('aria-hidden', 'true');
     }
 
     menuToggleBtn?.addEventListener('click', () => toggleMenu());
@@ -575,24 +909,33 @@ const STORE_ITEMS = [
       const portrait = document.getElementById('enemyPortrait');
       if (!portrait) return;
       portrait.onerror = null;
+      const currentSrc = portrait.dataset.currentEnemySrc || '';
       if (!src) {
         portrait.classList.add('hidden');
         portrait.removeAttribute('src');
         portrait.removeAttribute('alt');
+        portrait.dataset.currentEnemySrc = '';
+        return;
+      }
+      if (currentSrc === src && portrait.dataset.enemyLabel === label) {
         return;
       }
       portrait.alt = label || 'Enemy portrait';
       portrait.classList.remove('hidden');
+      portrait.dataset.enemyLabel = label || 'Enemy portrait';
       portrait.onerror = () => {
         removePortraitFromPool(src);
         const next = pickEnemyPortrait();
         if (next && next !== src) {
+          portrait.dataset.currentEnemySrc = '';
           portrait.src = next;
         } else {
           portrait.removeAttribute('src');
           portrait.classList.add('hidden');
+          portrait.dataset.currentEnemySrc = '';
         }
       };
+      portrait.dataset.currentEnemySrc = src;
       portrait.src = src;
     }
 
@@ -720,6 +1063,8 @@ const STORE_ITEMS = [
         lastChanceTokens: game.lastChanceTokens,
         nextRoundExtraCards: game.nextRoundExtraCards,
         currentRoundExtraCards: game.currentRoundExtraCards,
+        handSizePenalty: game.handSizePenalty,
+        handSizeStack: game.handSizeStack,
         guardBraceActive: game.guardBraceActive,
         luckyFlipReady: game.luckyFlipReady,
         luckyFlipUsedThisRoom: game.luckyFlipUsedThisRoom,
@@ -765,6 +1110,8 @@ const STORE_ITEMS = [
         game.lastChanceTokens = typeof payload.lastChanceTokens === 'number' ? payload.lastChanceTokens : 0;
         game.nextRoundExtraCards = typeof payload.nextRoundExtraCards === 'number' ? payload.nextRoundExtraCards : 0;
         game.currentRoundExtraCards = typeof payload.currentRoundExtraCards === 'number' ? payload.currentRoundExtraCards : 0;
+        game.handSizePenalty = typeof payload.handSizePenalty === 'number' ? payload.handSizePenalty : 0;
+        game.handSizeStack = typeof payload.handSizeStack === 'number' ? payload.handSizeStack : 0;
         game.guardBraceActive = Boolean(payload.guardBraceActive);
         game.luckyFlipReady = Boolean(payload.luckyFlipReady);
         game.luckyFlipUsedThisRoom = Boolean(payload.luckyFlipUsedThisRoom);
@@ -944,6 +1291,8 @@ const STORE_ITEMS = [
       devHeroHpModifier = readNumberInput(devHeroHpInput, devHeroHpModifier);
       devRecoverStrength = Math.max(0.1, readNumberInput(devRecoverInput, devRecoverStrength));
       devGuardEffectiveness = Math.max(0.1, readNumberInput(devGuardInput, devGuardEffectiveness));
+      devComboDamageCurve = Math.max(0.1, readNumberInput(devComboCurveInput, devComboDamageCurve));
+      devCoinGainMultiplier = Math.max(0, readNumberInput(devCoinGainMultiplierInput, devCoinGainMultiplier));
       devLoreOverride = Math.max(0, Math.round(readNumberInput(devLoreOverrideInput, devLoreOverride)));
       devInsightOverride = Math.max(0, Math.round(readNumberInput(devInsightOverrideInput, devInsightOverride)));
       devShowInsightAnim = devInsightAnimToggle ? devInsightAnimToggle.checked : true;
@@ -968,7 +1317,7 @@ const STORE_ITEMS = [
       const bossHpMult = type === 'boss' ? cfg.bossHpMultiplier * devBossHpMultiplier : 1;
       const depthBonus = Math.floor(game.roomIndex / 2);
       const base = (type === 'boss' ? BOSS_DMG_BASE : NORMAL_DMG_BASE) + cfg.enemyDamageBonus + devEnemyBaseDamage;
-      const dmg = Math.round((base + depthBonus) * enrageMultiplier);
+      const dmg = Math.max(0, Math.round((base + depthBonus) * enrageMultiplier));
       const hp = Math.round(card.value * mult * bossHpMult * (isEnrageElite ? 1.3 : 1) * enrageMultiplier);
       game.enemy.dmg = dmg;
       game.enemy.maxHp = hp;
@@ -987,6 +1336,8 @@ const STORE_ITEMS = [
       setVal('devHeroHpModVal', devHeroHpModifier);
       setVal('devRecoverStrengthVal', devRecoverStrength.toFixed(2));
       setVal('devGuardEffectivenessVal', devGuardEffectiveness.toFixed(2));
+      setVal('devComboCurveVal', devComboDamageCurve.toFixed(2));
+      setVal('devCoinGainMultiplierVal', devCoinGainMultiplier.toFixed(2));
       setVal('devUnderdogThresholdVal', devUnderdogThreshold);
       setVal('devLoreOverrideVal', devLoreOverride > 0 ? devLoreOverride : 'auto');
       setVal('devInsightOverrideVal', devInsightOverride > 0 ? devInsightOverride : 'auto');
@@ -1001,11 +1352,14 @@ const STORE_ITEMS = [
         devHeroHpModifier,
         devRecoverStrength,
         devGuardEffectiveness,
+        devComboDamageCurve,
+        devCoinGainMultiplier,
         devLoreOverride,
         devInsightOverride,
         devShowInsightAnim,
         devUnderdogThreshold,
-        devForcedRoomType
+        devForcedRoomType,
+        devTweaksVersion: DEV_TWEAKS_VERSION
       };
       try {
         localStorage.setItem('devTweaks', JSON.stringify(data));
@@ -1015,13 +1369,15 @@ const STORE_ITEMS = [
     }
 
     function resetDevTweaks() {
-      devRoomCount = 6;
+      devRoomCount = DEFAULT_ROOM_COUNT;
       devEnemyBaseDamage = 0;
       devEnemyHitChance = 0;
       devBossHpMultiplier = 1;
       devHeroHpModifier = 0;
       devRecoverStrength = 1;
       devGuardEffectiveness = 1;
+      devComboDamageCurve = 1;
+      devCoinGainMultiplier = 1;
       devLoreOverride = 0;
       devInsightOverride = 0;
       devShowInsightAnim = true;
@@ -1034,6 +1390,8 @@ const STORE_ITEMS = [
       if (devHeroHpInput) devHeroHpInput.value = devHeroHpModifier;
       if (devRecoverInput) devRecoverInput.value = devRecoverStrength;
       if (devGuardInput) devGuardInput.value = devGuardEffectiveness;
+      if (devComboCurveInput) devComboCurveInput.value = devComboDamageCurve;
+      if (devCoinGainMultiplierInput) devCoinGainMultiplierInput.value = devCoinGainMultiplier;
       if (devLoreOverrideInput) devLoreOverrideInput.value = '';
       if (devInsightOverrideInput) devInsightOverrideInput.value = '';
       if (devInsightAnimToggle) devInsightAnimToggle.checked = true;
@@ -1053,6 +1411,22 @@ const STORE_ITEMS = [
         console.warn('Unable to load dev tweaks', e);
       }
       if (!saved) return;
+      let upgraded = false;
+      if (!saved.devTweaksVersion || saved.devTweaksVersion < DEV_TWEAKS_VERSION) {
+        saved.devRoomCount = DEFAULT_ROOM_COUNT;
+        saved.devTweaksVersion = DEV_TWEAKS_VERSION;
+        upgraded = true;
+      }
+      if (saved.devCoinGainMultiplier === undefined || saved.devCoinGainMultiplier === null) {
+        saved.devCoinGainMultiplier = 1;
+      }
+      if (upgraded) {
+        try {
+          localStorage.setItem('devTweaks', JSON.stringify(saved));
+        } catch (e) {
+          console.warn('Unable to persist upgraded dev tweaks', e);
+        }
+      }
       const assignVal = (input, key) => {
         if (!input || saved[key] === undefined || saved[key] === null) return;
         input.value = saved[key];
@@ -1064,6 +1438,8 @@ const STORE_ITEMS = [
       assignVal(devHeroHpInput, 'devHeroHpModifier');
       assignVal(devRecoverInput, 'devRecoverStrength');
       assignVal(devGuardInput, 'devGuardEffectiveness');
+      assignVal(devComboCurveInput, 'devComboDamageCurve');
+      assignVal(devCoinGainMultiplierInput, 'devCoinGainMultiplier');
       assignVal(devUnderdogInput, 'devUnderdogThreshold');
       if (devLoreOverrideInput && typeof saved.devLoreOverride === 'number') {
         devLoreOverrideInput.value = saved.devLoreOverride;
@@ -1132,6 +1508,8 @@ const STORE_ITEMS = [
       devHeroHpInput,
       devRecoverInput,
       devGuardInput,
+      devComboCurveInput,
+      devCoinGainMultiplierInput,
       devLoreOverrideInput,
       devInsightOverrideInput,
       devUnderdogInput,
@@ -1144,6 +1522,10 @@ const STORE_ITEMS = [
     if (devInsightAnimToggle) {
       devInsightAnimToggle.addEventListener('change', updateDevOverrides);
     }
+    runOverlayButton?.addEventListener('click', () => {
+      hideRunOverlay();
+      startRun();
+    });
     updateDevOverrides();
     updateVariantBadge();
     const resumedRun = loadSavedRun();
@@ -1195,34 +1577,31 @@ const STORE_ITEMS = [
         const tier = heroDifficultyTier(p);
         div.className = `player-card focus-${focusKey}`;
         div.innerHTML = `
-          <div class="player-tag">
-            <span>Hero ${idx + 1}</span>
-            ${underdogBadge}
+          <div class="hero-header">
+            <span class="hero-label">Hero ${idx + 1}</span>
+            <span class="hero-role-icon">${FOCUS_ROLE_ICONS[focusKey] || '✦'}</span>
           </div>
-          <div class="hero-center">
-            <div class="hero-resources">
-              <div class="hp-pill">
-                <span class="hp-text"><i class="bi bi-heart-fill" aria-hidden="true"></i> ${p.hp}</span>
-              </div>
-              <div class="coin-pill hero-coin hidden" id="hero-${idx}-coin">
-                <i class="bi bi-currency-bitcoin" aria-hidden="true"></i>
-                <span class="coin-value">${p.coins || 0}</span>
-              </div>
-              <button type="button" class="insight-pill insight-cta" id="hero-${idx}-insight-btn">
-                <span class="insight-icon" aria-hidden="true"><i class="bi bi-lightbulb"></i></span>
-                <span class="insight-value">${p.insightPoints || 0}</span>
-                <span class="sr-only">Use Insight for Hero ${idx + 1}</span>
-              </button>
+          <div class="hero-stat-row">
+            <div class="stat-pill hp-pill">
+              <span class="icon">❤</span>
+              <span class="value">${p.hp}</span>
             </div>
-            <div class="hero-column">
-              <div class="stat-row">
-                <span><i class="bi bi-shield-fill-check"></i> ${p.might}</span>
-                <span><i class="bi bi-speedometer2"></i> ${p.agility}</span>
-                <span><i class="bi bi-stars"></i> ${p.lore}</span>
-              </div>
+            <div class="stat-pill coin-pill hero-coin-stat hidden" id="hero-${idx}-coin">
+              <span class="icon"><i class="bi bi-database-fill"></i></span>
+              <span class="value coin-value">${p.coins || 0}</span>
             </div>
+            <button type="button" class="stat-pill insight-pill" id="hero-${idx}-insight-btn">
+              <span class="icon"><i class="bi bi-lightbulb"></i></span>
+              <span class="value insight-value">${p.insightPoints || 0}</span>
+              <span class="sr-only">Use Insight for Hero ${idx + 1}</span>
+            </button>
           </div>
-          <div class="hero-actions" id="hero-${idx}-actions" aria-live="polite"></div>
+          <div class="hero-stats-compact">
+            <span><i class="bi bi-shield-fill-check"></i> ${p.might}</span>
+            <span><i class="bi bi-speedometer2"></i> ${p.agility}</span>
+            <span><i class="bi bi-stars"></i> ${p.lore}</span>
+          </div>
+          <div class="hero-controls-row hero-actions" id="hero-${idx}-actions" aria-live="polite"></div>
         `;
         playersContainer.appendChild(div);
         const insightBtn = div.querySelector(`#hero-${idx}-insight-btn`);
@@ -1310,9 +1689,11 @@ const STORE_ITEMS = [
     if (amount <= 0) return;
     const hero = game.players[idx];
     if (!hero) return;
-    hero.coins = (hero.coins || 0) + amount;
+    const scaled = Math.max(0, Math.round(amount * COIN_REWARD_SCALE * devCoinGainMultiplier));
+    if (scaled <= 0) return;
+    hero.coins = (hero.coins || 0) + scaled;
     renderHeroCoinState(idx);
-    addLog(`Hero ${idx + 1} gains +${amount} coins${context ? ` (${context})` : ''}.`, 'badge-success');
+    addLog(`Hero ${idx + 1} gains +${scaled} coins${context ? ` (${context})` : ''}.`, 'badge-success');
     saveRunState();
   }
 
@@ -1502,6 +1883,16 @@ const STORE_ITEMS = [
       renderStoreItems();
       renderChipBadge();
       renderHeroCoins();
+      if (isAppEconomy()) {
+        if (hero) {
+          addLog(
+            `Hero ${hero.id + 1} purchases ${item.label} for ${item.cost} coins (remaining ${hero.coins || 0}).`,
+            'badge-success'
+          );
+        }
+      } else {
+        addLog(`Purchased ${item.label} for ${item.cost} chips (pool now ${game.partyChips}).`, 'badge-success');
+      }
     }
 
     function clearStoreModalFocus() {
@@ -1545,8 +1936,9 @@ const STORE_ITEMS = [
       if (total <= 0) return false;
       const finishedIndex = game.roomIndex;
       const finishedNumber = finishedIndex + 1;
-      if ([2, 4].includes(finishedNumber)) return true;
-      if (finishedIndex === total - 2 && total > 1) return true;
+      const plannedStores = DEFAULT_STORE_ROOMS.filter(n => n <= total);
+      if (plannedStores.includes(finishedNumber)) return true;
+      if (!plannedStores.length && finishedIndex === total - 2 && total > 1) return true;
       return false;
     }
 
@@ -1561,6 +1953,13 @@ const STORE_ITEMS = [
         hero.gamblersGlintUsed = false;
       });
       updateLuckyFlipButton();
+    }
+
+    function setDungeonBackground(image) {
+      if (!dungeonCard) return;
+      const gradient = 'linear-gradient(145deg, rgba(14, 16, 32, 0.96), rgba(8, 10, 22, 0.96))';
+      const urlPart = image ? `, url("${image}")` : '';
+      dungeonCard.style.setProperty('--room-bg', `${gradient}${urlPart}`);
     }
 
     function setCombatMode(active) {
@@ -1585,34 +1984,71 @@ const STORE_ITEMS = [
       });
     }
 
-    function renderHandBadge() {
-      if (!handBadgeEl) return;
+    function getHandSizeTotals() {
       const activeExtra = game.handBonusActive ? 1 : 0;
       const queuedExtra = game.handBonusReady && !game.handBonusActive ? 1 : 0;
-      const queuedHint = game.handBonusReady && !game.handBonusActive ? ' (bonus queued)' : '';
       const storeExtra = game.currentRoundExtraCards || 0;
-      const total = BASE_HAND_SIZE + activeExtra + queuedExtra + storeExtra;
+      const penalty = game.handSizePenalty || 0;
+      const stackExtra = Math.max(0, game.handSizeStack || 0);
+      const baseTotal = Math.max(
+        1,
+        BASE_HAND_SIZE + stackExtra + activeExtra + storeExtra - penalty
+      );
+      const displayTotal = baseTotal + queuedExtra;
+      return {
+        baseTotal,
+        displayTotal,
+        queuedExtra,
+        storeExtra,
+        penalty,
+        activeExtra,
+        stackExtra
+      };
+    }
+
+    function renderHandBadge() {
+      if (!handBadgeEl) return;
+      const { displayTotal, queuedExtra, storeExtra, penalty, stackExtra } = getHandSizeTotals();
+      const queuedHint = queuedExtra ? ' (bonus queued)' : '';
       const storeHint = storeExtra ? ` (+${storeExtra})` : '';
-      handBadgeEl.textContent = `🂡 ${total}${queuedHint}${storeHint}`;
+      const penaltyHint = penalty ? ` (-${penalty})` : '';
+      const stackHint = stackExtra ? ` (+${stackExtra} stacked)` : '';
+      handBadgeEl.textContent = `🂡 ${displayTotal}${stackHint}${queuedHint}${storeHint}${penaltyHint}`;
     }
 
     function activateHandBonusForCombat() {
+      const hadReady = game.handBonusReady;
       if (game.handBonusReady) {
         game.handBonusActive = true;
         game.handBonusReady = false;
-        addLog('Bonus card active this round — draw 6 cards.', 'badge-success');
+        const { baseTotal } = getHandSizeTotals();
+        addLog(`Stacked hand size active — draw ${baseTotal} cards this round.`, 'badge-success');
       } else {
         game.handBonusActive = false;
+      }
+      const stackExtra = Math.max(0, game.handSizeStack || 0);
+      if (stackExtra > 0 && !hadReady) {
+        const { baseTotal } = getHandSizeTotals();
+        addLog(
+          `Stacked hand size active — draw ${baseTotal} cards this round (${stackExtra} stacked).`,
+          'badge-success'
+        );
       }
     }
 
     function renderRoom() {
       const total = game.dungeonRooms.length;
-      roomTotalEl.textContent = total;
-      roomIndexEl.textContent = game.roomIndex >= 0 ? (game.roomIndex + 1) : 0;
+      if (roomTotalEl) {
+        roomTotalEl.textContent = total;
+      }
+      if (roomIndexEl) {
+        roomIndexEl.textContent = game.roomIndex >= 0 ? (game.roomIndex + 1) : 0;
+      }
 
       if (game.roomIndex < 0 || game.roomIndex >= total) {
-        roomSummaryEl.textContent = 'Awaiting the first draw.';
+        if (roomSummaryEl) {
+          roomSummaryEl.textContent = 'Awaiting the first draw.';
+        }
         enemySummaryEl.textContent = '';
         setEnemyPortrait(null);
         setCombatMode(false);
@@ -1633,14 +2069,20 @@ const STORE_ITEMS = [
         boon: 'Boon Room'
       };
 
-      roomSummaryEl.innerHTML = `
+      if (roomSummaryEl) {
+        roomSummaryEl.innerHTML = `
         <div class="badge-row" style="align-items:center;gap:8px;flex-wrap:wrap;">
           <strong>Card:</strong> <span>${cardLabel(card)}</span>
           <span class="badge-pill">${roomTypeLabel(type)}</span>
         </div>
         <div class="muted" style="margin-top:4px;">${suitNotes[type] || ''}</div>
       `;
+      }
 
+      const trapNumber = type === 'trap' ? card.value + Math.floor(game.roomIndex / 2) : null;
+      if (type === 'trap') {
+        setDungeonBackground(TRAP_BG_IMAGE);
+      }
       if (displayType === 'enemy' || displayType === 'boss') {
         clearTrapPanel();
         const shell = document.querySelector('.enemy-portrait-shell');
@@ -1656,18 +2098,14 @@ const STORE_ITEMS = [
           const portrait = displayType === 'boss'
             ? bossPortraitForIndex(game.roomIndex)
             : pickEnemyPortrait();
-          game.enemy = { hp, maxHp: hp, dmg, type: displayType, portrait };
+          const profile = chooseEnemyProfile(card, displayType, game.roomIndex);
+          game.enemy = { hp, maxHp: hp, dmg, type: displayType, portrait, profile };
           activateHandBonusForCombat();
+          setEnemyIntent(game.enemy, true);
+          logTraitLegend(game.enemy.profile);
+          setDungeonBackground(game.enemy.portrait);
         }
-        const hpPercent = Math.max(0, Math.min(100, Math.round((game.enemy.hp / game.enemy.maxHp) * 100)));
-        enemySummaryEl.innerHTML = `
-          <div class="badge-row">
-            <span class="badge-pill badge-danger">${game.enemy.type === 'boss' ? 'Boss' : 'Enemy'}</span>
-            <span class="badge-pill">⚔ ${game.enemy.dmg}</span>
-            <span class="badge-pill">&#9829; ${Math.max(0, game.enemy.hp)}</span>
-          </div>
-          <div class="hp-bar"><span class="hp-fill" style="width:${hpPercent}%;"></span></div>
-        `;
+        updateEnemySummaryDisplay();
         setEnemyPortrait(game.enemy.portrait, game.enemy.type === 'boss' ? 'Boss portrait' : 'Enemy portrait');
         setCombatMode(true);
         renderActionSelectors();
@@ -1681,12 +2119,18 @@ const STORE_ITEMS = [
         setEnemyPortrait(null);
         const shell = document.querySelector('.enemy-portrait-shell');
         if (shell) {
-          shell.innerHTML = `<div class="room-icon">${type === 'trap' ? '♣' : type === 'boon' ? '♥' : type === 'treasure' ? '♦' : '🜏'}</div>`;
+          const iconContent = type === 'trap'
+            ? `<div class="trap-frame">
+                 <img class="trap-portrait-full" src="objects/trap.png" alt="Trap" />
+                 <span class="trap-number trap-number-frame">${trapNumber ?? '—'}</span>
+               </div>`
+            : `<div class="room-icon">${type === 'boon' ? '♥' : type === 'treasure' ? '♦' : '🜏'}</div>`;
+          shell.innerHTML = iconContent;
         }
         setCombatMode(false);
         game.handBonusActive = false;
         if (type === 'trap') {
-          const tn = card.value + Math.floor(game.roomIndex / 2);
+          const tn = trapNumber ?? (card.value + Math.floor(game.roomIndex / 2));
           initTrapState(tn);
           const hasInlineTrapControls = roomEventEl && roomEventEl.querySelector('.trap-pass');
           if (!hasInlineTrapControls) {
@@ -1709,11 +2153,12 @@ const STORE_ITEMS = [
     function actionOptionsHtml(idPrefix, idx) {
       const recoverDisabledAttr = activeVariants.ironSoul ? ' disabled' : '';
       return `
-        <select id="${idPrefix}-action-${idx}" aria-label="Hero action choice">
+        <select id="${idPrefix}-action-${idx}" class="hero-select" aria-label="Hero action choice">
           <option value="" selected disabled>Choose action</option>
           <option value="attack">Attack</option>
           <option value="recover"${recoverDisabledAttr}>Recover</option>
           <option value="guard">Guard</option>
+          <option value="revive"${recoverDisabledAttr}>Revive</option>
           <option value="hold">Hold</option>
         </select>
       `;
@@ -1721,7 +2166,7 @@ const STORE_ITEMS = [
 
     function comboOptionsHtml(idPrefix, idx) {
       return `
-        <select id="${idPrefix}-combo-${idx}" aria-label="Hero hand choice">
+        <select id="${idPrefix}-combo-${idx}" class="hero-select" aria-label="Hero hand choice">
           <option value="" selected disabled>Choose hand</option>
           <option value="none">None</option>
           <option value="high">High Card</option>
@@ -1744,24 +2189,21 @@ const STORE_ITEMS = [
         actionShell.innerHTML = '';
         if (p.hp <= 0) return;
 
-        const box = document.createElement('div');
-        box.className = 'combo-box';
         const baseId = `hero-${idx}`;
         const rerollButtonHtml = p.underdog
           ? `<button type="button" class="ghost reroll-btn" data-hero="${idx}" ${p.underdogRerollUsed ? 'disabled' : ''}>Scrappy</button>`
           : '';
-        box.innerHTML = `
+        actionShell.innerHTML = `
           ${actionOptionsHtml(baseId, idx)}
           ${comboOptionsHtml(baseId, idx)}
           ${rerollButtonHtml}
         `;
-        actionShell.appendChild(box);
-        const rerollBtn = box.querySelector('.reroll-btn');
+        const rerollBtn = actionShell.querySelector('.reroll-btn');
         if (rerollBtn) {
           rerollBtn.addEventListener('click', handleUnderdogReroll);
         }
-        const actionSel = box.querySelector(`#${baseId}-action-${idx}`);
-        const comboSel = box.querySelector(`#${baseId}-combo-${idx}`);
+        const actionSel = actionShell.querySelector(`#${baseId}-action-${idx}`);
+        const comboSel = actionShell.querySelector(`#${baseId}-combo-${idx}`);
         if (actionSel) {
           actionSel.value = getHeroSelection(idx).action || '';
           actionSel.addEventListener('change', () => {
@@ -1836,6 +2278,12 @@ const STORE_ITEMS = [
       }
     }
 
+    function downHeroes() {
+      return game.players
+        .map((p, idx) => ({ hero: p, index: idx }))
+        .filter(entry => entry.hero.hp <= 0);
+    }
+
     function refreshUI() {
       renderPlayers();
       renderRoom();
@@ -1870,18 +2318,24 @@ const STORE_ITEMS = [
       }
 
       game.roomDamageTaken = true;
-      p.hp -= adjusted;
+      p.hp = Math.max(0, p.hp - adjusted);
       addLog(`Hero ${idx + 1} takes ${adjusted} damage (${sourceLabel}). HP now ${p.hp}.`, 'badge-danger');
 
-      if (p.hp <= 0 && game.lastChanceTokens > 0) {
-        game.lastChanceTokens -= 1;
-        p.hp = 1;
-        addLog(`Last Chance Token keeps Hero ${idx + 1} at 1 HP.`, 'badge-success');
-      } else if (p.hp <= 0) {
+    if (p.hp <= 0 && game.lastChanceTokens > 0) {
+      game.lastChanceTokens -= 1;
+      p.hp = 1;
+      addLog(`Last Chance Token keeps Hero ${idx + 1} at 1 HP.`, 'badge-success');
+    } else if (p.hp <= 0) {
+      const remaining = aliveHeroes();
+      if (remaining.length === 0) {
         addLog(`Hero ${idx + 1} has fallen. The run is over.`, 'badge-danger');
         game.over = true;
         unlockRunOptions();
+        showRunOverlay('gameover', 'All heroes have fallen. The run is over.');
+      } else {
+        addLog(`Hero ${idx + 1} has fallen. Remaining heroes carry on.`, 'badge-danger');
       }
+    }
       saveRunState();
     }
 
@@ -1897,9 +2351,11 @@ const STORE_ITEMS = [
       if (validOptions.length === 0) return;
       const choice = validOptions[Math.floor(Math.random() * validOptions.length)];
       comboSel.value = choice;
+      updateHeroSelection(idx, 'combo', choice);
       hero.underdogRerollUsed = true;
       event.currentTarget.disabled = true;
       addLog(`Hero ${idx + 1} uses Underdog reroll → ${choice}.`, 'badge-success');
+      updateConfirmButtonState();
     }
 
     function loreModifier(lore) {
@@ -1909,8 +2365,48 @@ const STORE_ITEMS = [
       return 4;
     }
 
+    function pickRoomTypeFromPool(pool) {
+      if (!Array.isArray(pool) || pool.length === 0) return null;
+      const idx = Math.floor(Math.random() * pool.length);
+      return pool[idx];
+    }
+
+    function plannedRoomTypeForIndex(idx, total) {
+      const plan = DEFAULT_ROOM_PLAN.find(entry => idx >= entry.start && idx <= entry.end && idx < total);
+      if (!plan) return null;
+      return pickRoomTypeFromPool(plan.pool);
+    }
+
+    function suitForRoomType(type) {
+      switch (type) {
+        case 'enemy': return '♠';
+        case 'enemyHeart': return '♥';
+        case 'trap': return '♣';
+        case 'treasure': return '♦';
+        default: return null;
+      }
+    }
+
+    function buildDungeonRooms(deck, roomCount) {
+      const rooms = [];
+      for (let i = 0; i < roomCount; i++) {
+        const card = drawCard(deck);
+        const plannedType = plannedRoomTypeForIndex(i, roomCount);
+        if (plannedType) {
+          const plannedSuit = suitForRoomType(plannedType);
+          const plannedCard = { ...card, roomType: plannedType };
+          if (plannedSuit) plannedCard.suit = plannedSuit;
+          rooms.push(plannedCard);
+        } else {
+          rooms.push(card);
+        }
+      }
+      return rooms;
+    }
+
     // --- Start game ------------------------------------------------------
     function startRun() {
+      hideRunOverlay();
       const n = parseInt(numPlayersSelect.value, 10) || 1;
       updateVariantState();
       lockRunOptions();
@@ -1937,6 +2433,7 @@ const STORE_ITEMS = [
       game.lastChanceTokens = 0;
       game.nextRoundExtraCards = 0;
       game.currentRoundExtraCards = 0;
+      game.handSizePenalty = 0;
       game.guardBraceActive = false;
       game.luckyFlipReady = false;
       game.luckyFlipUsedThisRoom = false;
@@ -1944,6 +2441,7 @@ const STORE_ITEMS = [
       game.roomStyleReward = 0;
       game.roomStyleCombo = '';
       game.lastRewardedRoomIndex = -1;
+      game.handSizeStack = 0;
       renderChipBadge();
       updateDevChipReadout();
       updateLuckyFlipButton();
@@ -1992,9 +2490,7 @@ const STORE_ITEMS = [
       }
 
       const roomCount = Math.max(1, Math.round(devRoomCount));
-      for (let i = 0; i < roomCount; i++) {
-        game.dungeonRooms.push(drawCard(game.dungeonDeck));
-      }
+      game.dungeonRooms = buildDungeonRooms(game.dungeonDeck, roomCount);
 
       const activeVariantList = Object.entries(activeVariants)
         .filter(([, on]) => on)
@@ -2054,7 +2550,7 @@ const STORE_ITEMS = [
       if (type === 'boon' && currentDifficulty === 'dire') {
         addLog('Dire difficulty turns this room into combat.', 'badge-danger');
       } else if (displayType === 'enemy' || displayType === 'boss') {
-        addLog('Select actions and poker hands for each hero to resolve combat.', 'small');
+      addLog('Select actions and poker hands for each alive hero to resolve combat.', 'small');
       }
       refreshUI();
       // Always attempt a resolve after entering a room; non-combat/non-trap will auto-advance.
@@ -2067,7 +2563,6 @@ const STORE_ITEMS = [
         if (!heroSelectionsReady()) return;
         triggerActionEffects();
         void resolveRoomOrRound({ forceCombat: true });
-        resetHeroSelections();
       });
     }
     if (useLuckyFlipBtn) {
@@ -2095,7 +2590,7 @@ const STORE_ITEMS = [
           if (forceCombat) {
             await resolveCombatRound(displayType);
           } else {
-            addLog('Select actions and hands for each hero to resolve combat.', 'small');
+            addLog('Select actions and hands for each alive hero to resolve combat.', 'small');
           }
         } else if (type === 'trap') {
           resolveTrapRoom();
@@ -2213,21 +2708,31 @@ const STORE_ITEMS = [
         const hp = Math.round(card.value * mult * bossHpMult * enrageMultiplier);
         const depthBonus = Math.floor(game.roomIndex / 2);
         const base = (type === 'boss' ? BOSS_DMG_BASE : NORMAL_DMG_BASE) + cfg.enemyDamageBonus + devEnemyBaseDamage;
-        const dmg = Math.round((base + depthBonus) * enrageMultiplier);
+        const dmg = Math.max(0, Math.round((base + depthBonus) * enrageMultiplier));
         const eliteHp = Math.round(hp * (isAcceleratedElite || isEnrageElite ? 1.3 : 1));
         const hitChanceBonus = isAcceleratedElite ? 0.15 : 0;
+        const profile = chooseEnemyProfile(card, type, game.roomIndex);
         game.enemy = {
           hp: eliteHp,
           maxHp: eliteHp,
           dmg,
           type,
-          hitChanceBonus
+          hitChanceBonus,
+          profile
         };
         activateHandBonusForCombat();
+        setEnemyIntent(game.enemy, true);
       }
 
       const enemy = game.enemy;
       const isSpikeRound = activeVariants.spike && ((game.roomIndex + 1) % 3 === 0);
+      const intentEffect = enemy.currentIntent?.extra;
+      const ignoreGuardEffect = Boolean(intentEffect?.ignoreGuard);
+      let ignoreGuardAnnounced = !ignoreGuardEffect;
+      const enemyDisplayName = enemy.profile?.name || (enemy.type === 'boss' ? 'Boss' : 'Enemy');
+      if (intentEffect?.aoe) {
+        addLog(`${enemyDisplayName} unleashes an AoE Pulse!`, 'badge-warning');
+      }
       let empowerActive = game.boonEmpowerNextRound;
       let empowerUsed = false;
       if (empowerActive) {
@@ -2275,6 +2780,7 @@ const STORE_ITEMS = [
       let guardMultiplier = 1;
       let guardPreventAll = false;
       const direGuard = currentDifficulty === 'dire';
+      const guardingHeroes = new Set();
 
       for (const h of living) {
         const idx = h.index;
@@ -2301,46 +2807,90 @@ const STORE_ITEMS = [
           const baseDmg = COMBO_DAMAGE[comboKey] || 0;
           const bonus = Math.max(0, Math.floor((hero.might - 6) / 4));
           const extra = hero.keenEdge && KEEN_EDGE_COMBOS.has(comboKey) ? 1 : 0;
-          const dmg = baseDmg + bonus + extra;
-          if (dmg > 0) {
-            totalDamage += dmg;
+          const rawDamage = baseDmg + bonus + extra;
+          const scaledDamage = Math.max(0, Math.round(rawDamage * devComboDamageCurve));
+          const handType = normalizedHandKey(comboKey);
+          const { damage: baseFinalDamage, weaknessBonus, resistancePenalty } =
+            applyWeaknessResistance(scaledDamage, game.enemy?.profile, handType);
+          let finalDamage = baseFinalDamage;
+          if (intentEffect?.defensive) {
+            finalDamage = Math.max(0, Math.round(finalDamage * 0.75));
+          }
+          if (finalDamage > 0) {
+            totalDamage += finalDamage;
+            const curveHint = devComboDamageCurve !== 1 ? ` (${devComboDamageCurve.toFixed(2)}× curve)` : '';
+            const effectParts = [];
+            if (weaknessBonus) effectParts.push(`WEAKNESS +${weaknessBonus}`);
+            if (resistancePenalty) effectParts.push('RESISTS');
+            if (intentEffect?.defensive) effectParts.push('DEFENSE −25%');
+            const effectHint = effectParts.length ? ` (${effectParts.join(' & ')})` : '';
             addLog(
-              `Hero ${idx + 1} attacks with ${comboKey} for ${dmg} damage (Might bonus +${bonus}).`,
+              `Hero ${idx + 1} attacks with ${comboKey} for ${finalDamage} damage${curveHint}${effectHint} (Might bonus +${bonus}).`,
               'badge-success'
             );
+            if (resistancePenalty) {
+              const enemyLabel = game.enemy?.profile?.name || `${game.enemy.type === 'boss' ? 'Boss' : 'Enemy'}`;
+              addLog(
+                `${enemyLabel} RESISTS ${handDisplayLabel(handType)}. ${finalDamage} damage still hits.`,
+                'badge-danger'
+              );
+            }
             if (extra > 0) {
               addLog(`Keen Edge grants Hero ${idx + 1} +1 bonus damage.`, 'small');
+            }
+            if (intentEffect?.defensive) {
+              addLog(`${enemyDisplayName}'s defensive posture blunts the strike.`, 'small');
             }
           } else {
             addLog(`Hero ${idx + 1} chose Attack but had no effective combo.`, 'small');
           }
         }
 
-        if (action === 'recover') {
+        if (action === 'recover' || action === 'revive') {
+          const isRevive = action === 'revive';
           if (activeVariants.ironSoul) {
-            addLog(`Hero ${idx + 1} can't Recover in Iron Soul mode.`, 'badge-danger');
+            addLog(
+              `Hero ${idx + 1} can't ${isRevive ? 'Revive' : 'Recover'} in Iron Soul mode.`,
+              'badge-danger'
+            );
           } else {
-            let heal = 0;
-            if (comboKey === 'pair') heal = 2;
-            else if (comboKey === 'twoPair') heal = 4;
-            else if (comboKey === 'three') heal = 6;
-            else if (comboKey === 'full') heal = 10;
-
-            heal = Math.max(1, Math.round(heal * devRecoverStrength));
+            const baseHeal = RECOVER_HEAL_MAP[comboKey] || 0;
+            const loreMultiplier = recoverLoreMultiplier(hero);
+            const heal = Math.max(1, Math.round(baseHeal * devRecoverStrength * loreMultiplier));
             if (heal > 0) {
-              const before = hero.hp;
-              hero.hp = Math.min(hero.maxHp, hero.hp + heal);
-              addLog(
-                `Hero ${idx + 1} uses ${comboKey} to Recover ${hero.hp - before} HP (now ${hero.hp}/${hero.maxHp}).`,
-                'badge-success'
-              );
+              if (isRevive) {
+                const downed = downHeroes();
+                if (!downed.length) {
+                  addLog(`Hero ${idx + 1} tries to Revive but no hero is down.`, 'small');
+                } else {
+                  const targetEntry = downed[Math.floor(Math.random() * downed.length)];
+                  const targetHero = targetEntry.hero;
+                  const before = targetHero.hp;
+                  targetHero.hp = Math.min(targetHero.maxHp, targetHero.hp + heal);
+                  addLog(
+                    `Hero ${idx + 1} revives Hero ${targetEntry.index + 1} for ${targetHero.hp - before} HP (now ${targetHero.hp}/${targetHero.maxHp}).`,
+                    'badge-success'
+                  );
+                }
+              } else {
+                const before = hero.hp;
+                hero.hp = Math.min(hero.maxHp, hero.hp + heal);
+                addLog(
+                  `Hero ${idx + 1} uses ${comboKey} to Recover ${hero.hp - before} HP (now ${hero.hp}/${hero.maxHp}).`,
+                  'badge-success'
+                );
+              }
             } else {
-              addLog(`Hero ${idx + 1} tried to Recover but the hand gives no heal.`, 'small');
+              addLog(
+                `Hero ${idx + 1} tried to ${isRevive ? 'Revive' : 'Recover'} but the hand gives no heal.`,
+                'small'
+              );
             }
           }
         }
 
         if (action === 'guard') {
+          guardingHeroes.add(idx);
           if (comboKey === 'high') {
             if (!direGuard) {
               guardDamageReduction = Math.max(guardDamageReduction, 1);
@@ -2393,10 +2943,12 @@ const STORE_ITEMS = [
         guardMultiplier = Math.min(guardMultiplier + 0.25, 1);
         addLog('Spike Round weakens Guard this round.', 'small');
       }
+      const guardEffectActive = guardDamageReduction > 0 || guardPreventAll || guardMultiplier < 1;
 
       // Apply hero damage to enemy
       if (totalDamage > 0) {
         enemy.hp -= totalDamage;
+        updateEnemySummaryDisplay();
         addLog(
           `${enemy.type === 'boss' ? 'Boss' : 'Enemy'} takes ${totalDamage} total damage. HP now ${Math.max(0, enemy.hp)}.`,
           'badge-success'
@@ -2413,6 +2965,16 @@ const STORE_ITEMS = [
 
       // Enemy attacks
       living = aliveHeroes();
+      if (enemy.currentIntent?.type) {
+        const detailParts = [];
+        if (intentEffect?.description) detailParts.push(intentEffect.description);
+        if (intentEffect?.damageBonus) detailParts.push(`+${intentEffect.damageBonus} damage`);
+        if (intentEffect?.ignoreGuard) detailParts.push('ignores Guard');
+        if (intentEffect?.aoe) detailParts.push('hits all heroes');
+        if (intentEffect?.defensive) detailParts.push('hero attacks deal −25%');
+        const intentDetail = detailParts.length ? detailParts.join(' • ') : 'Enemy follows through on its intent.';
+        addLog(`Intent resolves: ${enemy.currentIntent.label} — ${intentDetail}`, 'badge-warning');
+      }
       living.forEach(h => {
         const idx = h.index;
         if (game.players[idx].hp <= 0) return;
@@ -2429,7 +2991,21 @@ const STORE_ITEMS = [
         const hitChance = clamp(BASE_HIT_CHANCE + enemyHitBonus - agilityMod, 0.2, 0.95);
 
         if (Math.random() < hitChance) {
-          if (guardPreventAll) {
+          if (ignoreGuardEffect && !ignoreGuardAnnounced && guardEffectActive) {
+            addLog(`${enemyDisplayName} ignores Guard this round.`, 'badge-warning');
+            ignoreGuardAnnounced = true;
+          }
+          if (!ignoreGuardEffect && guardEffectActive && !guardingHeroes.has(idx)) {
+            const sourceIdx = guardingHeroes.size ? [...guardingHeroes][0] : null;
+            const sourceLabel = sourceIdx !== null ? ` Hero ${sourceIdx + 1}'s guard` : ' Guard';
+            addLog(
+              `${enemy.type === 'boss' ? 'Boss' : 'Enemy'} would hit Hero ${idx + 1}, but${sourceLabel} blocks it for the whole party.`,
+              'badge-success'
+            );
+            return;
+          }
+
+          if (!ignoreGuardEffect && guardPreventAll) {
             addLog(
               `${enemy.type === 'boss' ? 'Boss' : 'Enemy'} would hit Hero ${idx + 1}, but Guard prevents all damage this round.`,
               'badge-success'
@@ -2438,13 +3014,18 @@ const STORE_ITEMS = [
           }
 
           let dmg = enemy.dmg;
+          if (intentEffect?.damageBonus) {
+            dmg += intentEffect.damageBonus;
+          }
           if (isSpikeRound) {
             dmg = Math.ceil(dmg * 1.5);
           }
-          if (guardDamageReduction > 0) {
-            dmg = Math.max(0, dmg - guardDamageReduction);
+          const guardReductionToApply = ignoreGuardEffect ? 0 : guardDamageReduction;
+          const guardMultiplierToApply = ignoreGuardEffect ? 1 : guardMultiplier;
+          if (guardReductionToApply > 0) {
+            dmg = Math.max(0, dmg - guardReductionToApply);
           }
-          dmg = Math.floor(dmg * guardMultiplier);
+          dmg = Math.floor(dmg * guardMultiplierToApply);
 
           if (dmg <= 0) {
             addLog(
@@ -2463,9 +3044,10 @@ const STORE_ITEMS = [
         }
       });
 
-      if (game.enemy && game.enemy.hp > 0 && !game.over) {
-        resetHeroSelections();
+      if (!game.over && enemy.hp > 0) {
+        setEnemyIntent(enemy, true);
       }
+
       refreshUI();
     }
 
@@ -2515,9 +3097,10 @@ const STORE_ITEMS = [
       addLog(`${type === 'boss' ? 'Boss' : 'Enemy'} is defeated!`, 'badge-success');
       game.handBonusActive = false;
       if (type !== 'boss') {
-        game.handBonusReady = true;
-        addLog('Enemy defeat awards +1 bonus card for the next hand.', 'badge-success');
-        setRoomEventMessage('Bonus card earned! Draw 5 + 1 cards next round.');
+        game.handSizeStack = Math.max(0, game.handSizeStack || 0) + 1;
+        addLog('Enemy defeat adds +1 stackable hand size for the next round.', 'badge-success');
+        const { displayTotal } = getHandSizeTotals();
+        setRoomEventMessage(`Hand size buff earned! Draw ${displayTotal} cards next round.`);
       }
       const shouldAdvance = handlePostRoomCompletion(type);
       game.guardBraceActive = false;
@@ -2530,6 +3113,7 @@ const STORE_ITEMS = [
         addLog('The boss falls. The dungeon is cleared. Victory!', 'badge-success');
         game.over = true;
         unlockRunOptions();
+        showRunOverlay('victory', 'All rooms have been completed. Victory is yours!');
       } else if (!game.over) {
         if (shouldAdvance) {
           if (game.roomIndex + 1 < game.dungeonRooms.length) {
@@ -2580,20 +3164,22 @@ const STORE_ITEMS = [
       updateDevVariantInfo();
       updateDevDungeonInfo();
       if (devTweaksInfo) {
-        const lines = [
-          `Room Count: ${devRoomCount}`,
-          `Enemy Damage: ${devEnemyBaseDamage >= 0 ? '+' : ''}${devEnemyBaseDamage}`,
-          `Enemy Hit: ${devEnemyHitChance >= 0 ? '+' : ''}${devEnemyHitChance.toFixed(2)}`,
-          `Boss HP Mult: ${devBossHpMultiplier.toFixed(2)}`,
-          `Hero HP Mod: ${devHeroHpModifier >= 0 ? '+' : ''}${devHeroHpModifier}`,
-          `Recover Str: ×${devRecoverStrength.toFixed(2)}`,
-          `Guard Mult: ×${devGuardEffectiveness.toFixed(2)}`,
-          `Underdog @< ${devUnderdogThreshold}`,
-          `Force Room: ${devForcedRoomType}`,
-          `Lore override: ${devLoreOverride > 0 ? devLoreOverride : 'auto'}`,
-          `Insight override: ${devInsightOverride > 0 ? devInsightOverride : 'auto'}`,
-          `Insight anim: ${devShowInsightAnim ? 'On' : 'Off'}`
-        ];
+      const lines = [
+        `Room Count: ${devRoomCount}`,
+        `Enemy Damage: ${devEnemyBaseDamage >= 0 ? '+' : ''}${devEnemyBaseDamage}`,
+        `Enemy Hit: ${devEnemyHitChance >= 0 ? '+' : ''}${devEnemyHitChance.toFixed(2)}`,
+        `Boss HP Mult: ${devBossHpMultiplier.toFixed(2)}`,
+        `Hero HP Mod: ${devHeroHpModifier >= 0 ? '+' : ''}${devHeroHpModifier}`,
+        `Recover Str: ×${devRecoverStrength.toFixed(2)}`,
+        `Guard Mult: ×${devGuardEffectiveness.toFixed(2)}`,
+        `Underdog @< ${devUnderdogThreshold}`,
+        `Force Room: ${devForcedRoomType}`,
+        `Combo curve: ×${devComboDamageCurve.toFixed(2)}`,
+        `Coin Gain Mult: ×${devCoinGainMultiplier.toFixed(2)}`,
+        `Lore override: ${devLoreOverride > 0 ? devLoreOverride : 'auto'}`,
+        `Insight override: ${devInsightOverride > 0 ? devInsightOverride : 'auto'}`,
+        `Insight anim: ${devShowInsightAnim ? 'On' : 'Off'}`
+      ];
       devTweaksInfo.innerHTML = lines.join('<br>');
     }
     }
@@ -2607,6 +3193,11 @@ const STORE_ITEMS = [
         heroHpModifier: devHeroHpModifier,
         recoverStrength: devRecoverStrength,
         guardEffectiveness: devGuardEffectiveness,
+        comboDamageCurve: devComboDamageCurve,
+        coinGainMultiplier: devCoinGainMultiplier,
+        loreOverride: devLoreOverride,
+        insightOverride: devInsightOverride,
+        insightAnim: devShowInsightAnim,
         underdogThreshold: devUnderdogThreshold,
         forcedRoomType: devForcedRoomType
       };
@@ -2697,10 +3288,8 @@ const STORE_ITEMS = [
         return;
       }
       game.dungeonDeck = shuffle(makeDeck());
-      game.dungeonRooms = [];
-      for (let i = 0; i < 6; i++) {
-        game.dungeonRooms.push(drawCard(game.dungeonDeck));
-      }
+      const roomCount = Math.max(1, Math.round(devRoomCount || DEFAULT_ROOM_COUNT));
+      game.dungeonRooms = buildDungeonRooms(game.dungeonDeck, roomCount);
       game.roomIndex = -1;
       game.enemy = null;
       addLog('Dev: Dungeon rerolled.', 'small');
@@ -2710,7 +3299,7 @@ const STORE_ITEMS = [
     function devQuickSim() {
       const runs = 50;
       let winChance = 0.5;
-      winChance -= Math.max(0, devRoomCount - 6) * 0.01;
+      winChance -= Math.max(0, devRoomCount - DEFAULT_ROOM_COUNT) * 0.01;
       winChance -= devEnemyBaseDamage * 0.01;
       winChance -= devEnemyHitChance * 0.2;
       winChance -= (devBossHpMultiplier - 1) * 0.05;
@@ -2736,18 +3325,19 @@ const STORE_ITEMS = [
       const { tn } = trapState;
 
       const finalizeTrap = (success) => {
-      if (!success) {
-        const damage = 2;
-        aliveHeroes().forEach(h => damageHero(h.index, damage, 'trap failure'));
-        addLog(`Trap not disarmed. Each hero takes ${damage} damage.`, 'badge-danger');
-        setRoomEventMessage(`Trap TN ${tn} failed — ${damage} damage dealt to all heroes`);
-      } else {
-        awardCoins(1, 'Trap disarmed');
-        addLog(`Trap TN ${tn} disarmed.`, 'badge-success');
-        setRoomEventMessage(`Trap TN ${tn} disarmed.`);
-      }
+        if (!success) {
+          game.handSizePenalty = Math.max(0, (game.handSizePenalty || 0) + 1);
+          const { displayTotal } = getHandSizeTotals();
+          addLog('Trap not disarmed. Hand size reduced by 1.', 'badge-danger');
+          setRoomEventMessage(`Trap TN ${tn} failed — hand size now ${displayTotal}.`);
+        } else {
+          awardCoins(1, 'Trap disarmed');
+          addLog(`Trap TN ${tn} disarmed.`, 'badge-success');
+          setRoomEventMessage(`Trap TN ${tn} disarmed.`);
+        }
         trapState = null;
-        renderRoom();
+        refreshUI();
+        saveRunState();
         if (game.over) return;
         if (handlePostRoomCompletion('trap')) {
           if (game.roomIndex + 1 < game.dungeonRooms.length) {
@@ -2764,15 +3354,15 @@ const STORE_ITEMS = [
         return;
       }
 
-      const trapPrompt = `Trap TN ${tn} — did you meet or stay under the target? Confirm outcome:`;
+      const trapPrompt = `Trap TN ${tn}`;
       setRoomEventMessage(trapPrompt);
       if (roomEventEl) {
         roomEventEl.innerHTML = `
           <div style="display:flex;flex-direction:column;gap:4px;">
             <span>${trapPrompt}</span>
             <div style="display:flex; gap:8px; flex-wrap:wrap; margin-top:2px;">
-              <button type="button" class="secondary trap-pass">Disarmed</button>
-              <button type="button" class="secondary trap-fail">Failed</button>
+              <button type="button" class="secondary trap-pass">Success</button>
+              <button type="button" class="secondary trap-fail">Failure</button>
             </div>
           </div>
         `;

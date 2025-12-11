@@ -1,27 +1,130 @@
-I would like traps to cause hand size to decrease by 1 if failed. Here’s a short, clean adjustment you can plug into your AI dev prompt or drop straight into your notes:
+Update the hero card component to maximize vertical space and make everything feel snug while staying readable on iPad (primary) and iPhone (secondary).
 
-⸻
+GOAL
+Create a compact hero card with:
+- A tiny header row
+- One tight stat row (HP, coins, Lore, etc.)
+- A compact control row for “Choose action” and “Choose hand”
 
-Adjustment: 12-Room Default Dungeon
+1. HEADER
 
-Change the core dungeon generation to:
-	•	Default rooms = 12
-	•	Room distribution (simple version):
-	•	Rooms 1–3 → Standard enemies / traps
-	•	Rooms 4–5 → Mix of standard + elite enemies
-	•	Room 6 → Auto opens Store
-	•	Rooms 7–9 → Harder enemies + elite spikes
-	•	Room 10 → Auto opens Store
-	•	Room 11 → Elite enemy
-	•	Room 12 → Boss
+Make the header very small and light:
 
-Implementation note:
-Set the global/default value:
+<div class="hero-header">
+  <span class="hero-label">Hero 1</span>
+  <span class="hero-role-icon">💠</span> <!-- optional focus icon -->
+</div>
 
-const DEFAULT_ROOM_COUNT = 12;
+.hero-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: 0.65rem;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  opacity: 0.7;
+  margin-bottom: 4px;
+}
 
-And ensure the Dev Panel “Room Count” field starts at 12 instead of 6.
+2. STAT BELT (TOP)
 
-⸻
+Turn the top HP / coins / Lore row into a single “belt” of equal-height pills that hugs the top of the card:
 
-If you want, I can also generate the tiny code snippet to drop into app.js to override the default cleanly.
+HTML:
+
+<div class="hero-stat-row">
+  <button class="stat-pill hp-pill">
+    <span class="icon">❤</span><span class="value">16</span>
+  </button>
+  <button class="stat-pill coin-pill">
+    <span class="icon">Ƀ</span><span class="value">5</span>
+  </button>
+  <button class="stat-pill lore-pill">
+    <span class="icon">💡</span><span class="value">1</span>
+  </button>
+</div>
+
+CSS:
+
+.hero-stat-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 6px;
+}
+
+.stat-pill {
+  flex: 1;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  height: 32px;                /* fixed, small height */
+  padding: 0 10px;
+  border-radius: 999px;
+  font-size: 0.75rem;
+  background: rgba(255,255,255,0.04);
+  border: 1px solid rgba(255,255,255,0.08);
+}
+
+.stat-pill .icon { opacity: 0.9; }
+.stat-pill .value { font-weight: 600; }
+
+/* On narrow screens, allow wrap but keep pills small */
+@media (max-width: 480px) {
+  .hero-stat-row {
+    flex-wrap: wrap;
+  }
+}
+
+3. CONTROLS ROW (BOTTOM)
+
+Place “Choose action” and “Choose hand” side-by-side on wider screens, stacked on small screens.
+
+HTML:
+
+<div class="hero-controls-row">
+  <select class="hero-select action-select">
+    <option>Choose action</option>
+    <!-- options -->
+  </select>
+  <select class="hero-select hand-select">
+    <option>Choose hand</option>
+    <!-- options -->
+  </select>
+</div>
+
+CSS:
+
+.hero-controls-row {
+  display: flex;
+  gap: 6px;
+  margin-top: 6px;
+}
+
+.hero-select {
+  flex: 1;
+  border-radius: 999px;
+  border: 1px solid rgba(255,255,255,0.08);
+  background: rgba(5,6,16,0.85);
+  padding: 6px 10px;
+  font-size: 0.75rem;
+}
+
+/* Stack on small phones */
+@media (max-width: 480px) {
+  .hero-controls-row {
+    flex-direction: column;
+  }
+}
+
+4. CARD PADDING
+
+Tighten the overall hero card:
+
+.player-card {
+  padding: 8px 10px;
+  gap: 6px;
+}
+
+Make these changes only to the hero card component so that the stat pills sit snug at the top, and the action/hand controls form a compact belt beneath them. Return the updated HTML/CSS snippet for the hero card.

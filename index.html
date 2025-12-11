@@ -29,15 +29,6 @@
 
     <section class="layout">
       <article class="panel dungeon" id="dungeonCard">
-        <!-- Top: room meta -->
-        <div class="room-head">
-          <p class="summary-text">
-            Room <span id="roomIndex">0</span> / <span id="roomTotal">0</span>
-          </p>
-        </div>
-
-        <!-- Room summary + event stacked, but short -->
-        <div id="roomSummary" class="room-summary">Awaiting the first draw.</div>
 
         <!-- Enemy row: art + stats side-by-side -->
         <div class="enemy-row">
@@ -55,6 +46,8 @@
             </div>
           </div>
         </div>
+
+        <div id="roomSummary" class="room-summary">Awaiting the first draw.</div>
 
         <!-- Boons -->
         <div id="boonOptions" class="boon-options" aria-live="polite">
@@ -84,7 +77,6 @@
             <button id="confirmActionsBtn" class="primary compact" disabled>Confirm</button>
             <button id="useLuckyFlipBtn" class="ghost compact" type="button" hidden>Lucky Flip</button>
           </div>
-          <span class="muted stats-label">HP • Stats</span>
           <span id="handSizeBadge" class="badge-pill card-badge">🂡 5</span>
           <span id="chipBadge" class="badge-pill chip-badge">
             <span class="chip-icon" aria-hidden="true"></span>
@@ -200,8 +192,8 @@
         <label>
           Room Count
           <div class="lever-row">
-            <input type="range" class="lever" id="devRoomCount" min="1" max="12" step="1" value="6" />
-            <span class="lever-value" id="devRoomCountVal">6</span>
+            <input type="range" class="lever" id="devRoomCount" min="1" max="12" step="1" value="12" />
+            <span class="lever-value" id="devRoomCountVal">12</span>
           </div>
         </label>
         <label>
@@ -237,6 +229,20 @@
           <div class="lever-row">
             <input type="range" class="lever" id="devRecoverStrength" min="0.5" max="3" step="0.1" value="1" />
             <span class="lever-value" id="devRecoverStrengthVal">1</span>
+          </div>
+        </label>
+        <label>
+          Combo Damage Curve
+          <div class="lever-row">
+            <input type="range" class="lever" id="devComboCurve" min="0.5" max="2" step="0.05" value="1" />
+            <span class="lever-value" id="devComboCurveVal">1.00</span>
+          </div>
+        </label>
+        <label>
+          Coin Gain Multiplier
+          <div class="lever-row">
+            <input type="range" class="lever" id="devCoinGainMultiplier" min="0" max="5" step="0.25" value="1" />
+            <span class="lever-value" id="devCoinGainMultiplierVal">1.00</span>
           </div>
         </label>
         <label>
@@ -306,7 +312,6 @@
 
   <div id="storeModal" class="store-modal" aria-hidden="true">
     <div class="store-shell">
-      <img id="storeMerchImage" class="store-merch" src="npc/merch.png" alt="Merchant" />
       <div class="store-head">
         <span>Merchant's Camp</span>
         <button id="storeCloseBtn" class="ghost small" type="button">Close</button>
@@ -389,6 +394,14 @@
         <li><strong>Option 2: App Coin Tracker</strong> — the app records each hero's coins, auto-adds rewards, and auto-deducts Store purchases.</li>
       </ul>
       <p class="muted-note">Dev Panel is for testing only and can change numbers mid-run.</p>
+    </div>
+  </div>
+  <div id="runOverlay" class="overlay run-overlay" aria-hidden="true">
+    <div class="overlay-content run-overlay-content">
+      <span id="runOverlayAccent" class="run-overlay-accent"></span>
+      <h2 id="runOverlayTitle">Victory</h2>
+      <p id="runOverlayMessage">You cleared every room!</p>
+      <button id="runOverlayButton" class="primary">Start New Run</button>
     </div>
   </div>
 
