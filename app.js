@@ -115,6 +115,7 @@
 const ROOM_BACKGROUND_GRADIENT = 'linear-gradient(145deg, rgba(14, 16, 32, 0.96), rgba(8, 10, 22, 0.96))';
 const DEFAULT_ROOM_COUNT = 12;
 const TRAP_BG_IMAGE = 'objects/trap.png';
+const MAX_HAND_STACK_FROM_ENEMY = 5; // +5 over base (10 max) from enemy defeats
 const BASE_HAND_SIZE = 5;
 const HERO_STARTING_COINS = 5;
 const COMBO_DAMAGE = {
@@ -463,7 +464,7 @@ const ECONOMY_MODES = {
   table: 'table',
   app: 'app'
 };
-const DEV_TWEAKS_VERSION = 3;
+const DEV_TWEAKS_VERSION = 4;
 let economyMode = ECONOMY_MODES.table;
 const COIN_REWARD_SCALE = 0.5;
 const STORE_ITEMS = [
@@ -659,6 +660,7 @@ const STORE_ITEMS = [
   let devForcedRoomType = 'auto';
   let devComboDamageCurve = 1;
   let devCoinGainMultiplier = 1;
+  let devHandStackCap = MAX_HAND_STACK_FROM_ENEMY;
     let storeOpen = false;
     let storePendingAdvance = false;
     let pendingHeroPurchase = null;
@@ -772,6 +774,7 @@ const STORE_ITEMS = [
     const devGuardInput = document.getElementById('devGuardEffectiveness');
     const devComboCurveInput = document.getElementById('devComboCurve');
     const devCoinGainMultiplierInput = document.getElementById('devCoinGainMultiplier');
+    const devHandStackCapInput = document.getElementById('devHandStackCap');
     const devLoreOverrideInput = document.getElementById('devLoreOverride');
     const devInsightOverrideInput = document.getElementById('devInsightOverride');
     const devInsightAnimToggle = document.getElementById('devInsightAnimToggle');
@@ -1064,7 +1067,7 @@ const STORE_ITEMS = [
         nextRoundExtraCards: game.nextRoundExtraCards,
         currentRoundExtraCards: game.currentRoundExtraCards,
         handSizePenalty: game.handSizePenalty,
-        handSizeStack: game.handSizeStack,
+        handSizeStack: clampHandSizeStack(game.handSizeStack),
         guardBraceActive: game.guardBraceActive,
         luckyFlipReady: game.luckyFlipReady,
         luckyFlipUsedThisRoom: game.luckyFlipUsedThisRoom,
@@ -1111,7 +1114,9 @@ const STORE_ITEMS = [
         game.nextRoundExtraCards = typeof payload.nextRoundExtraCards === 'number' ? payload.nextRoundExtraCards : 0;
         game.currentRoundExtraCards = typeof payload.currentRoundExtraCards === 'number' ? payload.currentRoundExtraCards : 0;
         game.handSizePenalty = typeof payload.handSizePenalty === 'number' ? payload.handSizePenalty : 0;
-        game.handSizeStack = typeof payload.handSizeStack === 'number' ? payload.handSizeStack : 0;
+        game.handSizeStack = clampHandSizeStack(
+          typeof payload.handSizeStack === 'number' ? payload.handSizeStack : 0
+        );
         game.guardBraceActive = Boolean(payload.guardBraceActive);
         game.luckyFlipReady = Boolean(payload.luckyFlipReady);
         game.luckyFlipUsedThisRoom = Boolean(payload.luckyFlipUsedThisRoom);
@@ -1293,11 +1298,13 @@ const STORE_ITEMS = [
       devGuardEffectiveness = Math.max(0.1, readNumberInput(devGuardInput, devGuardEffectiveness));
       devComboDamageCurve = Math.max(0.1, readNumberInput(devComboCurveInput, devComboDamageCurve));
       devCoinGainMultiplier = Math.max(0, readNumberInput(devCoinGainMultiplierInput, devCoinGainMultiplier));
+      devHandStackCap = Math.max(0, Math.round(readNumberInput(devHandStackCapInput, devHandStackCap)));
       devLoreOverride = Math.max(0, Math.round(readNumberInput(devLoreOverrideInput, devLoreOverride)));
       devInsightOverride = Math.max(0, Math.round(readNumberInput(devInsightOverrideInput, devInsightOverride)));
       devShowInsightAnim = devInsightAnimToggle ? devInsightAnimToggle.checked : true;
       devUnderdogThreshold = Math.max(1, Math.round(readNumberInput(devUnderdogInput, devUnderdogThreshold)));
       devForcedRoomType = devForceRoomTypeInput ? devForceRoomTypeInput.value : devForcedRoomType;
+      game.handSizeStack = clampHandSizeStack(game.handSizeStack);
       updateLeverDisplays();
       refreshDevPanel();
       applyDevTweaksToCurrentEnemy();
@@ -1338,6 +1345,7 @@ const STORE_ITEMS = [
       setVal('devGuardEffectivenessVal', devGuardEffectiveness.toFixed(2));
       setVal('devComboCurveVal', devComboDamageCurve.toFixed(2));
       setVal('devCoinGainMultiplierVal', devCoinGainMultiplier.toFixed(2));
+      setVal('devHandStackCapVal', `+${devHandStackCap} → ${BASE_HAND_SIZE + devHandStackCap} cards`);
       setVal('devUnderdogThresholdVal', devUnderdogThreshold);
       setVal('devLoreOverrideVal', devLoreOverride > 0 ? devLoreOverride : 'auto');
       setVal('devInsightOverrideVal', devInsightOverride > 0 ? devInsightOverride : 'auto');
@@ -1354,6 +1362,7 @@ const STORE_ITEMS = [
         devGuardEffectiveness,
         devComboDamageCurve,
         devCoinGainMultiplier,
+        devHandStackCap,
         devLoreOverride,
         devInsightOverride,
         devShowInsightAnim,
@@ -1378,6 +1387,7 @@ const STORE_ITEMS = [
       devGuardEffectiveness = 1;
       devComboDamageCurve = 1;
       devCoinGainMultiplier = 1;
+      devHandStackCap = MAX_HAND_STACK_FROM_ENEMY;
       devLoreOverride = 0;
       devInsightOverride = 0;
       devShowInsightAnim = true;
@@ -1392,6 +1402,7 @@ const STORE_ITEMS = [
       if (devGuardInput) devGuardInput.value = devGuardEffectiveness;
       if (devComboCurveInput) devComboCurveInput.value = devComboDamageCurve;
       if (devCoinGainMultiplierInput) devCoinGainMultiplierInput.value = devCoinGainMultiplier;
+      if (devHandStackCapInput) devHandStackCapInput.value = devHandStackCap;
       if (devLoreOverrideInput) devLoreOverrideInput.value = '';
       if (devInsightOverrideInput) devInsightOverrideInput.value = '';
       if (devInsightAnimToggle) devInsightAnimToggle.checked = true;
@@ -1417,6 +1428,9 @@ const STORE_ITEMS = [
         saved.devTweaksVersion = DEV_TWEAKS_VERSION;
         upgraded = true;
       }
+      if (saved.devHandStackCap === undefined || saved.devHandStackCap === null) {
+        saved.devHandStackCap = MAX_HAND_STACK_FROM_ENEMY;
+      }
       if (saved.devCoinGainMultiplier === undefined || saved.devCoinGainMultiplier === null) {
         saved.devCoinGainMultiplier = 1;
       }
@@ -1440,6 +1454,7 @@ const STORE_ITEMS = [
       assignVal(devGuardInput, 'devGuardEffectiveness');
       assignVal(devComboCurveInput, 'devComboDamageCurve');
       assignVal(devCoinGainMultiplierInput, 'devCoinGainMultiplier');
+      assignVal(devHandStackCapInput, 'devHandStackCap');
       assignVal(devUnderdogInput, 'devUnderdogThreshold');
       if (devLoreOverrideInput && typeof saved.devLoreOverride === 'number') {
         devLoreOverrideInput.value = saved.devLoreOverride;
@@ -1510,6 +1525,7 @@ const STORE_ITEMS = [
       devGuardInput,
       devComboCurveInput,
       devCoinGainMultiplierInput,
+      devHandStackCapInput,
       devLoreOverrideInput,
       devInsightOverrideInput,
       devUnderdogInput,
@@ -1977,6 +1993,11 @@ const STORE_ITEMS = [
       return Math.max(0, Math.floor(getHeroLoreForInsight(hero) / 2));
     }
 
+    function clampHandSizeStack(value) {
+      const cap = Number.isFinite(devHandStackCap) ? devHandStackCap : MAX_HAND_STACK_FROM_ENEMY;
+      return Math.max(0, Math.min(cap, value || 0));
+    }
+
     function resetRoundInsights() {
       game.players.forEach(hero => {
         if (!hero) return;
@@ -1989,7 +2010,7 @@ const STORE_ITEMS = [
       const queuedExtra = game.handBonusReady && !game.handBonusActive ? 1 : 0;
       const storeExtra = game.currentRoundExtraCards || 0;
       const penalty = game.handSizePenalty || 0;
-      const stackExtra = Math.max(0, game.handSizeStack || 0);
+      const stackExtra = clampHandSizeStack(game.handSizeStack);
       const baseTotal = Math.max(
         1,
         BASE_HAND_SIZE + stackExtra + activeExtra + storeExtra - penalty
@@ -2026,7 +2047,7 @@ const STORE_ITEMS = [
       } else {
         game.handBonusActive = false;
       }
-      const stackExtra = Math.max(0, game.handSizeStack || 0);
+      const stackExtra = clampHandSizeStack(game.handSizeStack);
       if (stackExtra > 0 && !hadReady) {
         const { baseTotal } = getHandSizeTotals();
         addLog(
@@ -2086,8 +2107,12 @@ const STORE_ITEMS = [
       if (displayType === 'enemy' || displayType === 'boss') {
         clearTrapPanel();
         const shell = document.querySelector('.enemy-portrait-shell');
-        if (shell && shell.querySelector('.room-icon')) {
-          shell.innerHTML = `<img id="enemyPortrait" class="enemy-portrait" alt="" />`;
+        if (shell) {
+          // Ensure trap/room icons are replaced with the combat portrait when entering an enemy room.
+          const hasPortrait = shell.querySelector('#enemyPortrait');
+          if (!hasPortrait) {
+            shell.innerHTML = `<img id="enemyPortrait" class="enemy-portrait" alt="" />`;
+          }
         }
         if (!game.enemy) {
           const mult = displayType === 'boss' ? BOSS_HP_MULT : BASE_ENEMY_HP_MULT;
@@ -3097,10 +3122,24 @@ const STORE_ITEMS = [
       addLog(`${type === 'boss' ? 'Boss' : 'Enemy'} is defeated!`, 'badge-success');
       game.handBonusActive = false;
       if (type !== 'boss') {
-        game.handSizeStack = Math.max(0, game.handSizeStack || 0) + 1;
-        addLog('Enemy defeat adds +1 stackable hand size for the next round.', 'badge-success');
-        const { displayTotal } = getHandSizeTotals();
-        setRoomEventMessage(`Hand size buff earned! Draw ${displayTotal} cards next round.`);
+        const previousStack = clampHandSizeStack(game.handSizeStack);
+        const nextStack = clampHandSizeStack(previousStack + 1);
+        game.handSizeStack = nextStack;
+        if (nextStack > previousStack) {
+          addLog(
+            `Enemy defeat adds +1 stackable hand size for the next round (${nextStack}/${devHandStackCap} max).`,
+            'badge-success'
+          );
+          const { displayTotal } = getHandSizeTotals();
+          setRoomEventMessage(`Hand size buff earned! Draw ${displayTotal} cards next round.`);
+        } else {
+          const { displayTotal } = getHandSizeTotals();
+          addLog(
+            `Hand size bonus from enemy defeats is already at the cap (${displayTotal} cards).`,
+            'small'
+          );
+          setRoomEventMessage(`Hand size bonus capped at ${displayTotal} cards.`);
+        }
       }
       const shouldAdvance = handlePostRoomCompletion(type);
       game.guardBraceActive = false;
@@ -3172,6 +3211,7 @@ const STORE_ITEMS = [
         `Hero HP Mod: ${devHeroHpModifier >= 0 ? '+' : ''}${devHeroHpModifier}`,
         `Recover Str: ×${devRecoverStrength.toFixed(2)}`,
         `Guard Mult: ×${devGuardEffectiveness.toFixed(2)}`,
+        `Hand Stack Cap: +${devHandStackCap} (max ${BASE_HAND_SIZE + devHandStackCap})`,
         `Underdog @< ${devUnderdogThreshold}`,
         `Force Room: ${devForcedRoomType}`,
         `Combo curve: ×${devComboDamageCurve.toFixed(2)}`,
