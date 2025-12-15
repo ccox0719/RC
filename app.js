@@ -1313,6 +1313,10 @@ const STORE_ITEMS = [
       enemyPortraitPool = enemyPortraitPool.filter(p => p !== path);
     }
 
+    function removeBossPortraitFromPool(path) {
+      bossPortraitPool = bossPortraitPool.filter(p => p !== path);
+    }
+
     function pickEnemyPortrait() {
       if (enemyPortraitPool.length === 0) {
         refreshEnemyPortraitPool();
@@ -1337,7 +1341,7 @@ const STORE_ITEMS = [
       return src;
     }
 
-    function setEnemyPortrait(src, label = '') {
+    function setEnemyPortrait(src, label = '', isBoss = false) {
       const portrait = document.getElementById('enemyPortrait');
       if (!portrait) return;
       portrait.onerror = null;
@@ -1356,16 +1360,27 @@ const STORE_ITEMS = [
       portrait.classList.remove('hidden');
       portrait.dataset.enemyLabel = label || 'Enemy portrait';
       portrait.onerror = () => {
-        removePortraitFromPool(src);
-        const next = pickEnemyPortrait();
-        if (next && next !== src) {
-          portrait.dataset.currentEnemySrc = '';
-          portrait.src = next;
+        if (isBoss) {
+          removeBossPortraitFromPool(src);
+          const next = pickBossPortrait();
+          if (next && next !== src) {
+            game.bossPortrait = next;
+            portrait.dataset.currentEnemySrc = '';
+            portrait.src = next;
+            return;
+          }
         } else {
-          portrait.removeAttribute('src');
-          portrait.classList.add('hidden');
-          portrait.dataset.currentEnemySrc = '';
+          removePortraitFromPool(src);
+          const next = pickEnemyPortrait();
+          if (next && next !== src) {
+            portrait.dataset.currentEnemySrc = '';
+            portrait.src = next;
+            return;
+          }
         }
+        portrait.removeAttribute('src');
+        portrait.classList.add('hidden');
+        portrait.dataset.currentEnemySrc = '';
       };
       portrait.dataset.currentEnemySrc = src;
       portrait.src = src;
@@ -2874,7 +2889,11 @@ const STORE_ITEMS = [
           }
         }
         updateEnemySummaryDisplay();
-        setEnemyPortrait(game.enemy.portrait, game.enemy.type === 'boss' ? 'Boss portrait' : 'Enemy portrait');
+        setEnemyPortrait(
+          game.enemy.portrait,
+          game.enemy.type === 'boss' ? 'Boss portrait' : 'Enemy portrait',
+          game.enemy.type === 'boss'
+        );
         setCombatMode(true);
         renderActionSelectors();
         ensureLuckyCoinReady();
